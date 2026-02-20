@@ -1,0 +1,944 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Header } from './components/Header';
+import { SubHeader } from './components/SubHeader';
+import { RecordHeader } from './components/RecordHeader';
+import { RecordBody } from './components/RecordBody';
+import { UtilityBar } from './components/UtilityBar';
+import { NewTaskModal } from './components/NewTaskModal';
+import { Dashboard } from './components/Dashboard';
+import { CasosListView } from './components/CasosListView';
+import { NewCaseWizard } from './components/NewCaseWizard';
+import { StudentsListView } from './components/StudentsListView';
+import { db } from './firebaseConfig';
+import { ChevronDown, Check, Trash2, Lock, AlertTriangle, X, Loader2 } from 'lucide-react';
+
+// --- Types ---
+export interface ProspectData {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    country: string;
+    phoneCode: string;
+    phone: string;
+    program: string;
+    daysCreation: number;
+    createdAt: string;
+    status?: string;
+    owner?: string;
+    type?: 'record' | 'new-case'; // Added to distinguish between regular records and system tabs
+}
+
+export interface User {
+    firstName: string;
+    lastName: string;
+    email: string;
+}
+
+// --- Constants for Registration ---
+const PROGRAMS = [
+    "Combo Tian Rodríguez",
+    "Libera tus finanzas en 6 pasos",
+    "Fundamentos de inversión y portafolio",
+    "Vibe Marketing",
+    "Cash flow infinito",
+    "Aprende de tus créditos y págales en tiempo récord"
+];
+
+const COUNTRY_CODES = [
+    { code: "+57", country: "Colombia", flag: "🇨🇴" },
+    { code: "+1", country: "USA", flag: "🇺🇸" },
+    { code: "+52", country: "México", flag: "🇲🇽" },
+    { code: "+34", country: "España", flag: "🇪🇸" },
+    { code: "+54", country: "Argentina", flag: "🇦🇷" },
+    { code: "+56", country: "Chile", flag: "🇨🇱" },
+    { code: "+51", country: "Perú", flag: "🇵🇪" },
+    { code: "+593", country: "Ecuador", flag: "🇪🇨" },
+    { code: "+507", country: "Panamá", flag: "🇵🇦" },
+    { code: "+506", country: "Costa Rica", flag: "🇨🇷" },
+    { code: "+58", country: "Venezuela", flag: "🇻🇪" },
+];
+
+// --- Default Data (The original Ana record) ---
+const DEFAULT_RECORD: ProspectData = {
+    id: 'default_ana',
+    firstName: 'Ana',
+    lastName: 'Mis propias Finanzas Mis inversiones',
+    email: 'an5ialmanza123@gmail.com',
+    country: 'Colombia',
+    phoneCode: '+57',
+    phone: '3197107191',
+    program: 'Libera tus finanzas en 6 pasos',
+    daysCreation: 52,
+    createdAt: new Date().toISOString(),
+    status: 'Agendado',
+    owner: 'Camila Patarroyo',
+    type: 'record'
+};
+
+// --- Login Component ---
+const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User) => void }) => {
+    const [view, setView] = useState<'login' | 'pin' | 'register' | 'prospect_register'>('login');
+
+    // Login States
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [pin, setPin] = useState('');
+
+    // Update Credentials States
+    const [regFirstName, setRegFirstName] = useState('');
+    const [regLastName, setRegLastName] = useState('');
+    const [regEmail, setRegEmail] = useState('');
+    const [regPassword, setRegPassword] = useState('');
+
+    // Prospect Registration States
+    const [prospectName, setProspectName] = useState('');
+    const [prospectLastName, setProspectLastName] = useState('');
+    const [prospectEmail, setProspectEmail] = useState('');
+    const [prospectCountryName, setProspectCountryName] = useState('Colombia');
+    const [prospectPhoneCode, setProspectPhoneCode] = useState(COUNTRY_CODES[0]);
+    const [prospectPhone, setProspectPhone] = useState('');
+    const [prospectProgram, setProspectProgram] = useState('');
+    const [daysCreation, setDaysCreation] = useState<number>(0);
+    const [termsAccepted, setTermsAccepted] = useState(true);
+    const [showCodeDropdown, setShowCodeDropdown] = useState(false);
+
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState('');
+    const codeDropdownRef = useRef<HTMLDivElement>(null);
+
+    // --- Reset/Trash State for Login Screen ---
+    const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+    const [resetPin, setResetPin] = useState('');
+    const [resetError, setResetError] = useState('');
+    const [isResetting, setIsResetting] = useState(false);
+    const [resetSuccess, setResetSuccess] = useState(false);
+
+    // Helper to sanitize email for Firebase Key
+    const getEmailKey = (email: string) => btoa(email.toLowerCase().trim());
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (codeDropdownRef.current && !codeDropdownRef.current.contains(event.target as Node)) {
+                setShowCodeDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+
+        try {
+            const userId = getEmailKey(username);
+            const snapshot = await db.ref(`users/${userId}`).once('value');
+            const val = snapshot.val();
+
+            if (val && val.password === password) {
+                onLoginSuccess({
+                    firstName: val.firstName,
+                    lastName: val.lastName,
+                    email: val.email
+                });
+            } else {
+                setError('Usuario o contraseña incorrectos. Si es tu primera vez, usa "Recuperar contraseña".');
+            }
+        } catch (err) {
+            setError('Error de conexión con la base de datos.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handlePinSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (pin === '0000') {
+            setView('register');
+            setError('');
+            setPin('');
+        } else {
+            setError('PIN incorrecto.');
+        }
+    };
+
+    const handleRegister = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+
+        try {
+            const userId = getEmailKey(regEmail);
+            await db.ref(`users/${userId}`).set({
+                firstName: regFirstName,
+                lastName: regLastName,
+                email: regEmail,
+                password: regPassword
+            });
+            setMessage('Datos actualizados correctamente. Por favor inicia sesión.');
+            setView('login');
+            setUsername(regEmail);
+            setPassword('');
+            setRegFirstName('');
+            setRegLastName('');
+            setRegEmail('');
+            setRegPassword('');
+        } catch (err) {
+            setError('No se pudieron guardar los datos.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleProspectSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!prospectProgram) {
+            setError('Por favor selecciona un programa de interés.');
+            return;
+        }
+
+        setError('');
+        setLoading(true);
+
+        try {
+            // Create a new prospect entry
+            const newProspectRef = db.ref('prospects').push();
+            await newProspectRef.set({
+                firstName: prospectName,
+                lastName: prospectLastName,
+                email: prospectEmail,
+                country: prospectCountryName,
+                phoneCode: prospectPhoneCode.code,
+                phone: prospectPhone,
+                program: prospectProgram,
+                daysCreation: daysCreation,
+                createdAt: new Date().toISOString(),
+                status: 'SQL', // Default state for new web leads
+                owner: 'Administrador Salesforce' // Default owner for new web leads
+            });
+
+            setMessage('¡Gracias! Tu información ha sido registrada.');
+
+            // Reset and go back to login after short delay
+            setTimeout(() => {
+                setView('login');
+                setMessage('');
+                setProspectName('');
+                setProspectLastName('');
+                setProspectEmail('');
+                setProspectPhone('');
+                setProspectProgram('');
+                setDaysCreation(0);
+            }, 2000);
+
+        } catch (err) {
+            setError('Error al registrar la información. Intenta nuevamente.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // --- Reset Database Logic ---
+    const handleResetDatabase = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setResetError('');
+
+        if (resetPin !== '00944') {
+            setResetError('PIN incorrecto. Acceso denegado.');
+            return;
+        }
+
+        setIsResetting(true);
+
+        try {
+            // 1. Get current data snapshot
+            const snapshot = await db.ref('prospects').once('value');
+            const updates: { [key: string]: any } = {};
+
+            // 2. Prepare updates for every prospect
+            snapshot.forEach((child) => {
+                const key = child.key;
+                // Reset status to SQL and owner to Admin
+                updates[`prospects/${key}/status`] = 'SQL';
+                updates[`prospects/${key}/owner`] = 'Administrador Salesforce';
+            });
+
+            // 3. Atomic update
+            if (Object.keys(updates).length > 0) {
+                await db.ref().update(updates);
+            }
+
+            setResetSuccess(true);
+            setTimeout(() => {
+                setIsResetModalOpen(false);
+                setResetSuccess(false);
+                setResetPin('');
+            }, 2000);
+
+        } catch (err) {
+            console.error(err);
+            setResetError('Error al resetear la base de datos.');
+        } finally {
+            setIsResetting(false);
+        }
+    };
+
+    // --- RENDER ---
+    return (
+        <div className={`min-h-screen relative ${view === 'prospect_register' ? 'bg-[#1a242f]' : 'bg-[#f4f6f9]'} flex flex-col items-center justify-center font-sans text-[#181b25] transition-colors duration-500`}>
+
+            {/* === ADMIN RESET BUTTON (Top Right) === */}
+            {view !== 'prospect_register' && (
+                <button
+                    onClick={() => setIsResetModalOpen(true)}
+                    className="absolute top-4 right-4 w-10 h-10 bg-yellow-400 hover:bg-yellow-500 text-black rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-105 border-2 border-yellow-600 z-50"
+                    title="Restaurar Base de Datos (Admin)"
+                >
+                    <Trash2 size={20} strokeWidth={2.5} />
+                </button>
+            )}
+
+            {/* Logo Area (Only for Login Views) */}
+            {view !== 'prospect_register' && (
+                <div className="mb-6 flex items-center gap-2">
+                    <div className="w-10 h-10 bg-yellow-400 rounded flex items-center justify-center text-white font-bold text-xs shadow-sm border-2 border-black">
+                        <span className="text-black text-2xl">🐝</span>
+                    </div>
+                    <span className="font-normal text-3xl text-gray-700 tracking-tight">smartBeemo<span className="text-sm align-top">™</span></span>
+                </div>
+            )}
+
+            {/* --- LOGIN VIEW --- */}
+            {view === 'login' && (
+                <div className="bg-white p-10 rounded-lg shadow-xl w-[380px] border border-gray-200">
+                    <form onSubmit={handleLogin}>
+                        {message && <div className="mb-4 text-green-600 text-sm text-center bg-green-50 p-2 rounded">{message}</div>}
+
+                        <div className="mb-4">
+                            <label className="block text-gray-600 text-sm mb-1">Username</label>
+                            <input
+                                type="text"
+                                required
+                                className="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-base focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition-shadow"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="mb-6">
+                            <label className="block text-gray-600 text-sm mb-1">Password</label>
+                            <input
+                                type="password"
+                                required
+                                className="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-base focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition-shadow"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                            />
+                        </div>
+
+                        {error && <div className="mb-4 text-red-600 text-sm text-center">{error}</div>}
+
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full bg-[#005fb2] hover:bg-[#004e92] text-white font-medium py-2 rounded-[4px] transition-colors shadow-sm disabled:opacity-50"
+                        >
+                            {loading ? 'Verificando...' : 'Log In'}
+                        </button>
+
+                        <div className="mt-4 flex items-center">
+                            <input type="checkbox" id="remember" className="mr-2 h-4 w-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500" />
+                            <label htmlFor="remember" className="text-sm text-gray-600">Remember me</label>
+                        </div>
+
+                        <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col gap-2">
+                            <button
+                                type="button"
+                                onClick={() => { setView('pin'); setError(''); setMessage(''); }}
+                                className="text-[#005fb2] text-sm hover:underline text-left"
+                            >
+                                Recuperar contraseña
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => { setView('prospect_register'); setError(''); setMessage(''); }}
+                                className="text-[#005fb2] text-sm hover:underline text-left font-medium mt-1"
+                            >
+                                Registrar candidato
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            {/* --- PIN VIEW --- */}
+            {view === 'pin' && (
+                <div className="bg-white p-10 rounded-lg shadow-xl w-[380px] border border-gray-200">
+                    <form onSubmit={handlePinSubmit}>
+                        <h3 className="text-lg font-medium text-gray-800 mb-4 text-center">Verificación de seguridad</h3>
+                        <p className="text-sm text-gray-600 mb-4 text-center">Ingresa el PIN de administrador para restablecer tus credenciales.</p>
+
+                        <div className="mb-6">
+                            <label className="block text-gray-600 text-sm mb-1">PIN</label>
+                            <input
+                                type="password"
+                                required
+                                className="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-base focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none"
+                                value={pin}
+                                onChange={(e) => setPin(e.target.value)}
+                                placeholder="****"
+                            />
+                        </div>
+
+                        {error && <div className="mb-4 text-red-600 text-sm text-center">{error}</div>}
+
+                        <button
+                            type="submit"
+                            className="w-full bg-[#005fb2] hover:bg-[#004e92] text-white font-medium py-2 rounded-[4px] transition-colors shadow-sm"
+                        >
+                            Verificar
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => { setView('login'); setError(''); }}
+                            className="w-full mt-2 text-[#005fb2] text-sm hover:underline py-1"
+                        >
+                            Cancelar
+                        </button>
+                    </form>
+                </div>
+            )}
+
+            {/* --- UPDATE CREDENTIALS VIEW --- */}
+            {view === 'register' && (
+                <div className="bg-white p-10 rounded-lg shadow-xl w-[380px] border border-gray-200">
+                    <form onSubmit={handleRegister}>
+                        <h3 className="text-lg font-medium text-gray-800 mb-4 text-center">Actualizar Datos</h3>
+
+                        <div className="flex gap-3 mb-4">
+                            <div className="flex-1">
+                                <label className="block text-gray-600 text-sm mb-1">Nombre</label>
+                                <input
+                                    type="text"
+                                    required
+                                    className="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-base focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none"
+                                    value={regFirstName}
+                                    onChange={(e) => setRegFirstName(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-gray-600 text-sm mb-1">Apellido</label>
+                                <input
+                                    type="text"
+                                    required
+                                    className="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-base focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none"
+                                    value={regLastName}
+                                    onChange={(e) => setRegLastName(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mb-4">
+                            <label className="block text-gray-600 text-sm mb-1">Correo corporativo</label>
+                            <input
+                                type="email"
+                                required
+                                className="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-base focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none"
+                                value={regEmail}
+                                onChange={(e) => setRegEmail(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="mb-6">
+                            <label className="block text-gray-600 text-sm mb-1">Nueva contraseña</label>
+                            <input
+                                type="password"
+                                required
+                                className="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-base focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none"
+                                value={regPassword}
+                                onChange={(e) => setRegPassword(e.target.value)}
+                            />
+                        </div>
+
+                        {error && <div className="mb-4 text-red-600 text-sm text-center">{error}</div>}
+
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full bg-[#005fb2] hover:bg-[#004e92] text-white font-medium py-2 rounded-[4px] transition-colors shadow-sm"
+                        >
+                            {loading ? 'Guardando...' : 'Aceptar'}
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => { setView('login'); setError(''); }}
+                            className="w-full mt-2 text-[#005fb2] text-sm hover:underline py-1"
+                        >
+                            Cancelar
+                        </button>
+                    </form>
+                </div>
+            )}
+
+            {/* --- PROSPECT REGISTER VIEW --- */}
+            {view === 'prospect_register' && (
+                <div className="bg-white rounded-xl shadow-2xl w-full max-w-[480px] overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+                    <div className="p-8 pb-6">
+                        <h1 className="text-3xl font-bold text-gray-900 text-center mb-2 leading-tight">
+                            ¡Recibe información y precios!
+                        </h1>
+                        <p className="text-gray-600 text-center text-sm mb-6 px-4">
+                            Al enviar tu información, uno de nuestros asesores te contactará.
+                        </p>
+
+                        {message ? (
+                            <div className="text-center py-10">
+                                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Check size={32} className="text-green-600" />
+                                </div>
+                                <h3 className="text-xl font-bold text-gray-800 mb-2">¡Registro Exitoso!</h3>
+                                <p className="text-gray-600">{message}</p>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleProspectSubmit} className="space-y-4">
+                                <div className="flex gap-4">
+                                    <div className="flex-1">
+                                        <input
+                                            type="text"
+                                            placeholder="Nombre*"
+                                            required
+                                            value={prospectName}
+                                            onChange={(e) => setProspectName(e.target.value)}
+                                            className="w-full border border-gray-300 rounded px-4 py-3 text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <input
+                                            type="text"
+                                            placeholder="Apellido*"
+                                            required
+                                            value={prospectLastName}
+                                            onChange={(e) => setProspectLastName(e.target.value)}
+                                            className="w-full border border-gray-300 rounded px-4 py-3 text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <input
+                                        type="email"
+                                        placeholder="Email*"
+                                        required
+                                        value={prospectEmail}
+                                        onChange={(e) => setProspectEmail(e.target.value)}
+                                        className="w-full border border-gray-300 rounded px-4 py-3 text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div className="flex gap-4">
+                                    <div className="w-1/3">
+                                        <input
+                                            type="text"
+                                            value={prospectCountryName}
+                                            onChange={(e) => setProspectCountryName(e.target.value)}
+                                            className="w-full border border-gray-300 rounded px-4 py-3 text-gray-700 outline-none bg-gray-50"
+                                            placeholder="País"
+                                        />
+                                    </div>
+                                    <div className="flex-1 flex gap-2">
+                                        <div className="relative" ref={codeDropdownRef}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowCodeDropdown(!showCodeDropdown)}
+                                                className="h-full px-2 border border-gray-300 rounded bg-[#f3f4f6] flex items-center gap-1 hover:bg-gray-200"
+                                            >
+                                                <span className="text-xl">{prospectPhoneCode.flag}</span>
+                                                <span className="text-xs font-medium text-gray-600">{prospectPhoneCode.code}</span>
+                                            </button>
+
+                                            {showCodeDropdown && (
+                                                <div className="absolute top-full left-0 mt-1 w-[160px] bg-white border border-gray-300 shadow-xl rounded z-50 max-h-48 overflow-y-auto">
+                                                    {COUNTRY_CODES.map((item, idx) => (
+                                                        <div
+                                                            key={idx}
+                                                            onClick={() => {
+                                                                setProspectPhoneCode(item);
+                                                                setShowCodeDropdown(false);
+                                                            }}
+                                                            className="px-3 py-2 hover:bg-blue-50 cursor-pointer flex items-center gap-2"
+                                                        >
+                                                            <span className="text-lg">{item.flag}</span>
+                                                            <span className="text-sm text-gray-600 font-medium">{item.code}</span>
+                                                            <span className="text-xs text-gray-400 truncate">{item.country}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="tel"
+                                            placeholder="Teléfono*"
+                                            required
+                                            value={prospectPhone}
+                                            onChange={(e) => setProspectPhone(e.target.value)}
+                                            className="w-full border border-gray-300 rounded px-4 py-3 text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="relative">
+                                    <select
+                                        required
+                                        value={prospectProgram}
+                                        onChange={(e) => setProspectProgram(e.target.value)}
+                                        className="w-full border border-gray-300 rounded px-4 py-3 text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 appearance-none bg-white cursor-pointer"
+                                    >
+                                        <option value="" disabled>¿Cuál es tu programa de interés?*</option>
+                                        {PROGRAMS.map(prog => (
+                                            <option key={prog} value={prog}>{prog}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none" size={16} />
+                                </div>
+                                <div className="relative">
+                                    <label className="text-xs text-gray-500 ml-1 mb-1 block">Simulación: Días de creación (0-99)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="99"
+                                        value={daysCreation}
+                                        onChange={(e) => setDaysCreation(parseInt(e.target.value) || 0)}
+                                        className="w-full border border-gray-300 rounded px-4 py-2 text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div className="flex items-start gap-2 mt-2">
+                                    <div className="relative flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="terms"
+                                            checked={termsAccepted}
+                                            onChange={(e) => setTermsAccepted(e.target.checked)}
+                                            className="peer h-4 w-4 cursor-pointer appearance-none rounded border border-gray-300 checked:bg-gray-800 checked:border-gray-800 transition-all"
+                                        />
+                                        <Check size={10} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100 pointer-events-none" />
+                                    </div>
+                                    <label htmlFor="terms" className="text-sm text-gray-600 italic cursor-pointer">
+                                        Acepto recibir información vía <span className="text-[#25D366] font-bold">WhatsApp</span> y SMS.
+                                    </label>
+                                </div>
+                                {error && <div className="text-red-500 text-sm text-center font-medium">{error}</div>}
+                                <button
+                                    type="submit"
+                                    disabled={loading || !termsAccepted}
+                                    className="w-full bg-[#1e5af6] hover:bg-[#1546c9] text-white font-bold py-3 rounded-lg shadow-lg transition-transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+                                >
+                                    {loading ? 'Enviando...' : 'Quiero conocer precios'}
+                                </button>
+                            </form>
+                        )}
+                    </div>
+                    <div className="bg-gray-50 p-6 text-[10px] text-gray-500 leading-tight border-t border-gray-100">
+                        Al hacer clic, nos autoriza a contactarlo/la mediante un sistema automatizado de llamadas al teléfono indicado arriba con el fin de recibir información relevante sobre smartBeemo™, y acepta nuestros <a href="#" className="text-[#1e5af6] underline">Términos y Condiciones</a> y <a href="#" className="text-[#1e5af6] underline">Política de Privacidad</a>. Su consentimiento no constituye una condición de compra.
+                        <div className="mt-4 text-center">
+                            <button
+                                onClick={() => setView('login')}
+                                className="text-gray-400 hover:text-gray-600 underline"
+                            >
+                                Volver al inicio de sesión
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Footer (Only for Login Views) */}
+            {view !== 'prospect_register' && (
+                <div className="mt-8 text-xs text-gray-500">
+                    © 2026 Salesforce, Inc. All rights reserved.
+                </div>
+            )}
+
+            {/* --- RESET MODAL --- */}
+            {isResetModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-lg shadow-2xl w-[400px] border border-gray-200 overflow-hidden">
+                        {/* Header */}
+                        <div className="bg-yellow-400 p-4 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="bg-white p-1.5 rounded-full">
+                                    <AlertTriangle size={20} className="text-yellow-600" />
+                                </div>
+                                <h3 className="font-bold text-gray-900">Restaurar Base de Datos</h3>
+                            </div>
+                            <button onClick={() => setIsResetModalOpen(false)} className="text-black/50 hover:text-black transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6">
+                            {resetSuccess ? (
+                                <div className="text-center py-6">
+                                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <Check size={32} className="text-green-600" />
+                                    </div>
+                                    <h4 className="text-xl font-bold text-gray-800">¡Restauración Exitosa!</h4>
+                                    <p className="text-sm text-gray-600 mt-2">Todos los leads han vuelto a estado SQL.</p>
+                                </div>
+                            ) : (
+                                <form onSubmit={handleResetDatabase}>
+                                    <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                                        Esta acción moverá <strong>todos los estudiantes</strong> al estado <span className="font-bold text-blue-600">SQL</span> y asignará el propietario a <span className="font-bold">Administrador Salesforce</span>.
+                                    </p>
+                                    <p className="text-xs text-gray-500 mb-4 bg-gray-50 p-2 rounded border border-gray-200">
+                                        Esto se usa para dejar la plataforma limpia para entrenamientos.
+                                    </p>
+
+                                    <div className="mb-4 relative">
+                                        <label className="block text-xs font-bold text-gray-700 mb-1 uppercase tracking-wide">PIN de Autorización</label>
+                                        <div className="relative">
+                                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                            <input
+                                                type="password"
+                                                className="w-full border-2 border-gray-300 rounded px-3 py-2 pl-9 text-base focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 outline-none transition-all"
+                                                placeholder="Ingresa el PIN"
+                                                value={resetPin}
+                                                onChange={(e) => setResetPin(e.target.value)}
+                                                autoFocus
+                                            />
+                                        </div>
+                                        {resetError && <div className="text-red-600 text-xs mt-1 font-medium flex items-center gap-1"><AlertTriangle size={10} /> {resetError}</div>}
+                                    </div>
+
+                                    <div className="flex gap-3 justify-end mt-6">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsResetModalOpen(false)}
+                                            className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={isResetting || !resetPin}
+                                            className="px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-black text-sm font-bold rounded shadow-sm disabled:opacity-50 flex items-center gap-2"
+                                        >
+                                            {isResetting && <Loader2 size={14} className="animate-spin" />}
+                                            {isResetting ? 'Procesando...' : 'Restaurar Todo'}
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const App = () => {
+    // 1. User State
+    const [user, setUser] = useState<User | null>(null);
+
+    // ── On app boot: clear any stale Five9 session from localStorage ──
+    // This ensures the mobile phone number always starts as black (non-clickable)
+    // text on every page load, regardless of what was stored in a previous session.
+    useEffect(() => {
+        localStorage.removeItem('five9_status');
+        window.dispatchEvent(new Event('five9_status_changed'));
+    }, []);
+
+    // 2. Navigation / Tabs State
+    // Start with no open tabs; the default view is the dashboard (Inicio)
+    const [tabs, setTabs] = useState<ProspectData[]>([]);
+    const [activeTabId, setActiveTabId] = useState<string>('');
+
+    const [currentView, setCurrentView] = useState<'record' | 'dashboard' | 'list' | 'students-list'>('dashboard');
+
+    // 3. Modals State
+    const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+    const [taskToast, setTaskToast] = useState<{ visible: boolean; message: string }>({ visible: false, message: '' });
+
+    const showTaskCreatedToast = (subject: string) => {
+        setTaskToast({ visible: true, message: `Se creó la tarea "${subject}"` });
+        setTimeout(() => setTaskToast({ visible: false, message: '' }), 4000);
+    };
+
+    // 4. Real-time Firebase listeners for open record tabs
+    //    Whenever the set of open tabs changes, subscribe to each prospect's
+    //    Firebase node so every agent sees status/owner updates instantly.
+    useEffect(() => {
+        const refs: { ref: any; listener: any }[] = [];
+
+        tabs.forEach((tab) => {
+            // Only subscribe to real prospect records (not wizard tabs)
+            if (tab.type === 'new-case') return;
+
+            const prospectRef = db.ref(`prospects/${tab.id}`);
+            const listener = prospectRef.on('value', (snapshot: any) => {
+                const val = snapshot.val();
+                if (!val) return;
+                // Merge Firebase data into the tab, preserving any local fields
+                setTabs((prev) =>
+                    prev.map((t) =>
+                        t.id === tab.id
+                            ? { ...t, status: val.status, owner: val.owner }
+                            : t
+                    )
+                );
+            });
+
+            refs.push({ ref: prospectRef, listener });
+        });
+
+        // Cleanup: remove all listeners when tabs change or component unmounts
+        return () => {
+            refs.forEach(({ ref, listener }) => ref.off('value', listener));
+        };
+    }, [tabs.map((t) => t.id).join(',')]); // re-run only when the list of tab IDs changes
+
+    // Handlers
+    const handleLogin = (userData: User) => {
+        setUser(userData);
+    };
+
+    const handleOpenRecord = (record: ProspectData) => {
+        const existing = tabs.find(t => t.id === record.id);
+        if (!existing) {
+            setTabs([...tabs, record]);
+        }
+        setActiveTabId(record.id);
+        setCurrentView('record');
+    };
+
+    const handleTabClick = (id: string) => {
+        setActiveTabId(id);
+        const tab = tabs.find(t => t.id === id);
+        if (tab?.type === 'new-case') {
+            // Wizard is rendered via content logic
+        } else {
+            setCurrentView('record');
+        }
+    };
+
+    const handleTabClose = (id: string) => {
+        const newTabs = tabs.filter(t => t.id !== id);
+        setTabs(newTabs);
+        if (activeTabId === id) {
+            if (newTabs.length > 0) {
+                const lastTab = newTabs[newTabs.length - 1];
+                setActiveTabId(lastTab.id);
+                if (lastTab.type !== 'new-case') {
+                    setCurrentView('record');
+                }
+            } else {
+                setCurrentView('dashboard');
+                setActiveTabId('');
+            }
+        }
+    };
+
+    const handleNavigate = (dest: string) => {
+        if (dest === 'Inicio') setCurrentView('dashboard');
+        else if (dest === 'Casos') setCurrentView('list');
+        else if (dest === 'Estudiantes') setCurrentView('students-list');
+        else setCurrentView('dashboard');
+    };
+
+    const handleNewCase = () => {
+        const newTab: ProspectData = {
+            id: `new-case-${Date.now()}`,
+            firstName: 'Nuevo',
+            lastName: 'Caso',
+            email: '', country: '', phoneCode: '', phone: '', program: '', daysCreation: 0, createdAt: new Date().toISOString(),
+            type: 'new-case'
+        };
+        setTabs([...tabs, newTab]);
+        setActiveTabId(newTab.id);
+        setCurrentView('record'); // Wizard is rendered in 'record' slot if type is new-case
+    };
+
+    // If not logged in
+    if (!user) {
+        return <Login onLoginSuccess={handleLogin} />;
+    }
+
+    // Determine content
+    let content;
+    const activeTab = tabs.find(t => t.id === activeTabId);
+
+    if (currentView === 'dashboard') {
+        content = <Dashboard />;
+    } else if (currentView === 'list') {
+        content = <CasosListView onNewCase={handleNewCase} />;
+    } else if (currentView === 'students-list') {
+        content = <StudentsListView currentUser={user} onOpenRecord={handleOpenRecord} />;
+    } else if (activeTab?.type === 'new-case') {
+        content = (
+            <NewCaseWizard
+                onCancel={() => handleTabClose(activeTab.id)}
+                onSave={() => handleTabClose(activeTab.id)}
+                currentUser={user}
+            />
+        );
+    } else if (activeTab) {
+        content = (
+            <>
+                <RecordHeader data={activeTab} onNewTaskClick={() => setIsTaskModalOpen(true)} />
+                <div className="flex-1 overflow-hidden relative">
+                    <RecordBody
+                        data={activeTab}
+                        currentUser={user}
+                        onUpdateRecord={(updated) => setTabs(tabs.map(t => t.id === updated.id ? updated : t))}
+                    />
+                </div>
+            </>
+        );
+    } else {
+        content = <Dashboard />;
+    }
+
+    return (
+        <div className="flex flex-col h-screen overflow-hidden bg-white font-sans text-[#181b25]">
+            <Header onOpenRecord={handleOpenRecord} />
+            <SubHeader
+                tabs={tabs}
+                activeTabId={activeTabId}
+                onTabClick={handleTabClick}
+                onTabClose={handleTabClose}
+                onNavigate={handleNavigate}
+                currentView={currentView}
+            />
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative bg-[#eef1f6]">
+                {content}
+            </div>
+            <UtilityBar />
+            <NewTaskModal
+                isOpen={isTaskModalOpen}
+                onClose={() => setIsTaskModalOpen(false)}
+                prospectId={activeTabId || undefined}
+                currentUser={user}
+                onTaskCreated={showTaskCreatedToast}
+            />
+            {taskToast.visible && (
+                <div className="fixed top-28 left-1/2 transform -translate-x-1/2 z-[200] flex items-center justify-between gap-4 bg-[#04844b] text-white px-4 py-3 rounded shadow-lg min-w-[480px] animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="flex items-center gap-3">
+                        <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center shrink-0">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#04844b" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                        </div>
+                        <span className="font-semibold text-sm tracking-wide">{taskToast.message}</span>
+                    </div>
+                    <button onClick={() => setTaskToast({ visible: false, message: '' })} className="text-white/80 hover:text-white">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default App;

@@ -1,0 +1,5 @@
+{
+  "name": "Salesforce Student Demo",
+  "description": "A high-fidelity replica of the Salesforce Sales Console for student training purposes.",
+  "requestFramePermissions": []
+}
