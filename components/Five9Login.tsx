@@ -64,6 +64,10 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
     const [status, setStatus] = useState('Not Ready');
     const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
 
+    // Call Context State
+    const [callDirection, setCallDirection] = useState<'manual' | 'simulated' | null>(null);
+    const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+
     // Audio Devices State
     const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
     const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
@@ -78,11 +82,6 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
         }, 1000);
         return () => clearInterval(interval);
     }, []);
-
-    // Reset timer ONLY when Status changes
-    useEffect(() => {
-        setElapsedTime(0);
-    }, [status]);
 
     // ── Listen for click-to-dial events dispatched by RecordBody ──
     useEffect(() => {
@@ -101,6 +100,45 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
         return () => window.removeEventListener('five9:dial', handleDialEvent);
     }, []);
 
+    // ── Listen for simulated incoming calls ──
+    useEffect(() => {
+        const handleIncomingSimulation = (e: Event) => {
+            const detail = (e as CustomEvent).detail;
+            if (!detail) return;
+
+            // 1. Force the Five9 modal to show up regardless of its current minimized state
+            // If the parent component passed an onMaximize or similar we'd call it, 
+            // but since it only has onMinimize/onClose, we dispatch a global event
+            // that App.tsx could listen to if it controls visibility. Or we rely on the 
+            // user having it open. For now, we just ensure the view forces open inside Five9.
+
+            // 2. Setup the active call
+            setActiveCall({
+                name: detail.name,
+                number: detail.number,
+                relatedTo: detail.relatedTo
+            });
+            // 3. Auto-answer logic
+            setStatus('On Call');
+            setCallDirection('simulated');
+            setCallStatus('Connected');
+            setCallDuration(0);
+            setView('active_call');
+
+            // 4. Add to Recent Calls
+            const newCall = {
+                name: detail.name,
+                number: detail.number,
+                campaign: detail.campaign || '1. Premium evento',
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            };
+            setRecentCalls(prev => [newCall, ...prev]);
+        };
+
+        window.addEventListener('five9:incoming_simulation_call', handleIncomingSimulation);
+        return () => window.removeEventListener('five9:incoming_simulation_call', handleIncomingSimulation);
+    }, []);
+
     // ── Sync status to localStorage whenever view or status changes ──
     // This ensures 'Not Ready' (the default post-login status) is also persisted
     useEffect(() => {
@@ -112,9 +150,10 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
     }, [view, status]);
 
     const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
+        const hrs = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
         const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
+        return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
     useEffect(() => {
@@ -170,23 +209,11 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                 }
             }
 
-            // Create Audio Source from Buffer to play via Audio Element for setSinkId support
-            // Actually, we can't easily play a buffer via Audio element without creating a blob.
-            // Let's create a WAV blob from the buffer.
-
-            const wavBlob = bufferToWave(buffer, duration * sampleRate);
-            const audioUrl = URL.createObjectURL(wavBlob);
-            const audio = new Audio(audioUrl);
-
-            if (selectedOutput && (audio as any).setSinkId) {
-                try {
-                    await (audio as any).setSinkId(selectedOutput);
-                } catch (e) {
-                    console.warn("Failed to set sink ID", e);
-                }
-            }
-
-            audio.play();
+            // Play the buffer natively (much more reliable across browsers than creating blobs dynamically)
+            const source = ctx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(ctx.destination);
+            source.start();
 
         } catch (e) {
             console.error("Audio play failed", e);
@@ -279,7 +306,7 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
         osc2.connect(gain);
         gain.connect(ctx.destination);
 
-        // Ring pattern: 2s on, 4s off (Total 6s cycle)
+        // Ring pattern: 1.5s on, 2.5s off (Total 4s cycle)
         const playCycle = () => {
             const now = ctx.currentTime;
             // Reset to 0 to be safe (or maintain off)
@@ -287,11 +314,11 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
             // Start Ring
             gain.gain.linearRampToValueAtTime(0.1, now + 0.1);
             // End Ring
-            gain.gain.linearRampToValueAtTime(0, now + 2.1);
+            gain.gain.linearRampToValueAtTime(0, now + 1.6);
         };
 
         playCycle(); // First ring
-        const interval = setInterval(playCycle, 6000); // Repeat every 6s
+        const interval = setInterval(playCycle, 4000); // Repeat every 4s
 
         osc1.start();
         osc2.start();
@@ -300,6 +327,8 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
             stop: () => {
                 clearInterval(interval);
                 try {
+                    gain.gain.cancelScheduledValues(ctx.currentTime);
+                    gain.gain.setValueAtTime(0, ctx.currentTime);
                     osc1.stop();
                     osc2.stop();
                     ctx.close();
@@ -337,6 +366,7 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                 number: phoneNumber,
                 relatedTo: relatedTo || 'Unknown'
             });
+            setCallDirection('manual');
             setCallStatus('Dialing');
             setCallDuration(0);
             setView('active_call');
@@ -351,12 +381,6 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
             setRecentCalls(prev => [newCall, ...prev]);
 
             playRingtone();
-
-            // Allow ringing indefinitely until End Call
-            // setTimeout(() => {
-            //    setCallStatus('Connected');
-            //    stopRingtone();
-            // }, 4000);
 
         } catch (e) {
             console.error(e);
@@ -374,7 +398,7 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
     useEffect(() => {
         let interval: NodeJS.Timeout;
         if (view === 'active_call') {
-            if (callStatus === 'Connected') {
+            if (callStatus === 'Connected' || callStatus === 'Dialing') {
                 interval = setInterval(() => {
                     setCallDuration(prev => prev + 1);
                 }, 1000);
@@ -386,7 +410,8 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                             // Auto-transition
                             setView('console');
                             setStatus('Forzado');
-                            setElapsedTime(0);
+                            // Removed setElapsedTime(0) to allow accumulated time 
+                            // to persist if transitioning to forced wrap up.
                             return 0;
                         }
                         return prev - 1;
@@ -1116,7 +1141,10 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
 
                             <div className="mb-3">
                                 <label className="text-[#54698d] text-xs block">Campaign</label>
-                                <div className="text-[#16325c] font-bold text-sm">Manual Calls</div>
+                                <div className="text-[#16325c] font-bold text-sm">
+                                    {/* Muestra la campaña del cliente simulado si existe, sino Manual Calls */}
+                                    {recentCalls.find(c => c.number === activeCall.number)?.campaign || 'Manual Calls'}
+                                </div>
                             </div>
                             <div className="mb-3">
                                 <label className="text-[#54698d] text-xs block">Phone</label>
@@ -1458,10 +1486,19 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
 
                             <button
                                 onClick={() => {
+                                    stopRingtone();
                                     stopHoldMusic();
                                     setView('console');
                                     setActiveCall(null);
                                     setCallStatus('');
+
+                                    // Make Complete Transfer behave like End Interaction
+                                    // Go back to ready status automatically to trigger the next simulation
+                                    // and accumulate the time spent on the transfer/call.
+                                    const readyStatus = 'Ready (Voice, Voicemail)';
+                                    setStatus(readyStatus);
+                                    localStorage.setItem('five9_status', readyStatus);
+                                    window.dispatchEvent(new Event('five9_status_changed'));
                                 }}
                                 className="w-full py-2 bg-[#0070d2] text-white rounded text-sm font-medium hover:bg-[#005fb2] transition-colors mt-1"
                             >
@@ -1496,7 +1533,45 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
     }
 
     if (view === 'disposition') {
-        const dispositions = ['Do Not Call', 'Llamada Manual'];
+        const manualDispositions = ['Do Not Call', 'Llamada Manual'];
+        // Simulated Disposition Tree Structure based on user screenshots
+        const simulatedDispositions = [
+            { id: 'dnc', label: 'Do Not Call', type: 'option' },
+            { id: 'recycle', label: 'Recycle', type: 'option' },
+            {
+                id: 'sin_gestion', label: 'SIN GESTION', type: 'category', children: [
+                    { id: 'buzon', label: 'Buzon de Voz', type: 'option' },
+                    { id: 'contesta_otra', label: 'Contesta otra persona', type: 'option' },
+                    { id: 'llamada_muda', label: 'Llamada Muda', type: 'option' },
+                    { id: 'mala_comunicacion', label: 'Mala Comunicacion', type: 'option' },
+                    { id: 'lead_no_disponible', label: 'Lead no disponible', type: 'option' }
+                ]
+            },
+            {
+                id: 'gestionado', label: 'GESTIONADO', type: 'category', children: [
+                    { id: 'agendado', label: 'Agendado', type: 'option' },
+                    { id: 'asignados', label: 'Asignados', type: 'option' },
+                    { id: 'informado', label: 'Informado', type: 'option' }
+                ]
+            },
+            {
+                id: 'no_calificado', label: 'NO CALIFICADO', type: 'category', children: [
+                    { id: 'estudiante_fuera_perfil', label: 'Estudiante Fuera de Perfil', type: 'option' },
+                ]
+            },
+            {
+                id: 'venta_cerrada', label: 'VENTA CERRADA', type: 'category', children: [
+                    { id: 'matricula_exitosa', label: 'Matricula Exitosa', type: 'option' },
+                ]
+            }
+        ];
+
+        const toggleCategory = (categoryId: string) => {
+            setExpandedCategories(prev => ({
+                ...prev,
+                [categoryId]: !prev[categoryId]
+            }));
+        };
         return (
             <div className="fixed bottom-[36px] left-0 w-[600px] h-auto bg-white shadow-2xl border border-gray-300 rounded-tr-lg z-[60] flex flex-col font-sans animate-in slide-in-from-bottom-2 duration-200">
                 {/* Header */}
@@ -1549,18 +1624,76 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                             value={dispositionSearch}
                             onChange={(e) => setDispositionSearch(e.target.value)}
                         />
-                        <div className="flex flex-col gap-2">
-                            {dispositions.filter(d => d.toLowerCase().includes(dispositionSearch.toLowerCase())).map(d => (
-                                <label key={d} className="flex items-center gap-2 cursor-pointer group">
-                                    <div
-                                        onClick={() => setSelectedDisposition(d)}
-                                        className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedDisposition === d ? 'border-[#0070d2] bg-[#0070d2]' : 'border-gray-400 group-hover:border-[#0070d2]'}`}
-                                    >
-                                        <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-                                    </div>
-                                    <span className={`text-sm ${selectedDisposition === d ? 'font-bold text-[#16325c]' : 'text-[#16325c]'}`}>{d}</span>
-                                </label>
-                            ))}
+                        <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-2">
+                            {callDirection === 'manual' ? (
+                                manualDispositions.filter(d => d.toLowerCase().includes(dispositionSearch.toLowerCase())).map(d => (
+                                    <label key={d} className="flex items-center gap-2 cursor-pointer group">
+                                        <div
+                                            onClick={() => setSelectedDisposition(d)}
+                                            className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedDisposition === d ? 'border-[#0070d2] bg-[#0070d2]' : 'border-gray-400 group-hover:border-[#0070d2]'}`}
+                                        >
+                                            <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                        </div>
+                                        <span className={`text-sm ${selectedDisposition === d ? 'font-bold text-[#16325c]' : 'text-[#16325c]'}`}>{d}</span>
+                                    </label>
+                                ))
+                            ) : (
+                                // Render Simulated Dispositions Tree
+                                simulatedDispositions.map((node: any) => {
+                                    if (node.type === 'option') {
+                                        if (dispositionSearch && !node.label.toLowerCase().includes(dispositionSearch.toLowerCase())) return null;
+                                        return (
+                                            <label key={node.id} className="flex items-center gap-2 cursor-pointer group">
+                                                <div
+                                                    onClick={() => setSelectedDisposition(node.label)}
+                                                    className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedDisposition === node.label ? 'border-[#0070d2] bg-[#0070d2]' : 'border-gray-400 group-hover:border-[#0070d2]'}`}
+                                                >
+                                                    <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                                </div>
+                                                <span className={`text-sm ${selectedDisposition === node.label ? 'font-bold text-[#16325c]' : 'text-[#16325c]'}`}>{node.label}</span>
+                                            </label>
+                                        );
+                                    } else if (node.type === 'category') {
+                                        // If searching, check if any child matches
+                                        const searchLower = dispositionSearch.toLowerCase();
+                                        const matchingChildren = node.children.filter((child: any) => child.label.toLowerCase().includes(searchLower));
+
+                                        if (dispositionSearch && matchingChildren.length === 0 && !node.label.toLowerCase().includes(searchLower)) return null;
+
+                                        // Auto-expand if searching and there are matches inside
+                                        const isExpanded = dispositionSearch ? matchingChildren.length > 0 : expandedCategories[node.id];
+                                        const childrenToRender = dispositionSearch && !node.label.toLowerCase().includes(searchLower) ? matchingChildren : node.children;
+
+                                        return (
+                                            <div key={node.id} className="flex flex-col">
+                                                <div
+                                                    onClick={() => toggleCategory(node.id)}
+                                                    className="flex items-center gap-1 cursor-pointer hover:bg-gray-50 py-1"
+                                                >
+                                                    <ChevronDown size={14} className={`text-gray-500 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                                                    <span className="text-sm text-[#54698d] uppercase">{node.label}</span>
+                                                </div>
+                                                {isExpanded && (
+                                                    <div className="pl-6 flex flex-col gap-2 mt-1 border-l border-dotted border-gray-300 ml-1.5">
+                                                        {childrenToRender.map((child: any) => (
+                                                            <label key={child.id} className="flex items-center gap-2 cursor-pointer group">
+                                                                <div
+                                                                    onClick={() => setSelectedDisposition(child.label)}
+                                                                    className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedDisposition === child.label ? 'border-[#0070d2] bg-[#0070d2]' : 'border-gray-400 group-hover:border-[#0070d2]'}`}
+                                                                >
+                                                                    <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                                                </div>
+                                                                <span className={`text-sm ${selectedDisposition === child.label ? 'font-bold text-[#16325c]' : 'text-[#16325c]'}`}>{child.label}</span>
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                })
+                            )}
                         </div>
                     </div>
 
@@ -1596,16 +1729,26 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                     <button
                         onClick={() => {
                             // End Interaction
+                            stopRingtone(); // Force stop ringtone just in case
                             setView('console');
-                            setCallStatus('');
-                            setCallDuration(0);
+                            setActiveCall(null);
                             setSelectedDisposition(null);
-                            // Do not reset elapsedTime (status timer continues)
+                            setDispositionSearch('');
+
+                            // Check if simulation is active globally using localStorage or rely on App.tsx logic? 
+                            // Always go back to ready on end interaction if it was a simulated call, 
+                            // Actually, just going back to 'Ready' is the standard behaviour required here
+                            const readyStatus = 'Ready (Voice, Voicemail)';
+                            setStatus(readyStatus);
+                            // We DO NOT reset elapsedTime to 0 here.
+                            // The user requested that the time spent on the call should be ADDED
+                            // to the time they already had in "Ready" status.
+                            // Since `elapsedTime` keeps counting in the background during the call (because the interval in useEffect doesn't stop),
+                            // just not resetting it will naturally preserve the total contiguous time (Ready + On Call + Ready again).
+                            localStorage.setItem('five9_status', readyStatus);
+                            window.dispatchEvent(new Event('five9_status_changed'));
                         }}
-                        className={`px-4 py-2 text-white rounded text-sm font-normal w-1/2 transition-colors ${selectedDisposition
-                            ? 'bg-[#0070d2] hover:bg-[#005fb2]'
-                            : 'bg-[#d8dde6] cursor-not-allowed'
-                            }`}
+                        className={`px-4 py-2 text-white rounded text-sm font-normal w-1/2 transition-colors ${selectedDisposition ? 'bg-[#0070d2] hover:bg-[#005fb2]' : 'bg-[#d8dde6] cursor-not-allowed'}`}
                         disabled={!selectedDisposition}
                     >
                         End Interaction

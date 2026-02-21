@@ -36,7 +36,14 @@ export const UtilityBar: React.FC = () => {
             setIsFive9Visible(true);
         };
         window.addEventListener('five9:dial', handler);
-        return () => window.removeEventListener('five9:dial', handler);
+        window.addEventListener('five9:maximize', handler);
+        window.addEventListener('five9:incoming_simulation_call', handler);
+
+        return () => {
+            window.removeEventListener('five9:dial', handler);
+            window.removeEventListener('five9:maximize', handler);
+            window.removeEventListener('five9:incoming_simulation_call', handler);
+        };
     }, [isFive9Mounted]);
 
     return (

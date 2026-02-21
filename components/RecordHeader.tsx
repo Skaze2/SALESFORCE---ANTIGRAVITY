@@ -12,9 +12,11 @@ interface RecordHeaderProps {
  * Uses ONLY inline styles to avoid any Tailwind CSS class leakage.
  */
 export const RecordHeader: React.FC<RecordHeaderProps> = ({ data, onNewTaskClick }) => {
-    const daysCreation = data.createdAt
-        ? Math.floor((Date.now() - new Date(data.createdAt).getTime()) / (1000 * 60 * 60 * 24))
-        : 365;
+    const daysCreation = data.daysCreation !== undefined
+        ? data.daysCreation
+        : (data.createdAt
+            ? Math.floor((Date.now() - new Date(data.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+            : 365);
 
     // ── Shared token values ────────────────────────────────────────────────
     const COLOR_LABEL = '#706e6b';   // SF warm gray for labels

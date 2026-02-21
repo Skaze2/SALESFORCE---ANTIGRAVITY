@@ -821,6 +821,8 @@ const ActivitySidebar: React.FC<{
     // --- Select offer array and formatting based on prospect country ---
     const isColombia = country === 'Colombia';
     const isMexico = country === 'México' || country === 'Mexico';
+
+    // Colombia -> COP, Mexico -> MXN, Rest of the world -> USD
     const baseOffers = isColombia ? OFFERS_COP : isMexico ? OFFERS_MXN : OFFERS_USD;
     const offerCurrency = isColombia ? 'COP' : isMexico ? 'MXN' : 'USD';
     const offerLocale = isColombia ? 'es-CO' : isMexico ? 'es-MX' : 'en-US';

@@ -40,14 +40,15 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRecord }) => {
 
         const lowerTerm = searchTerm.toLowerCase();
         const filtered = allProspects.filter(p => {
-            const fullName = `${p.firstName} ${p.lastName}`.toLowerCase();
-            const email = p.email.toLowerCase();
-            const fullPhone = `${p.phoneCode}${p.phone}`.replace(/\s/g, '');
+            const fullName = `${p.firstName || ''} ${p.lastName || ''}`.toLowerCase();
+            const email = (p.email || '').toLowerCase();
+            const fullPhone = `${p.phoneCode || ''}${p.phone || ''}`.replace(/\s/g, '');
+            const phone = p.phone || '';
 
             return fullName.includes(lowerTerm) ||
                 email.includes(lowerTerm) ||
                 fullPhone.includes(lowerTerm) ||
-                p.phone.includes(lowerTerm);
+                phone.includes(lowerTerm);
         });
 
         setResults(filtered);

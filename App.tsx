@@ -9,8 +9,10 @@ import { Dashboard } from './components/Dashboard';
 import { CasosListView } from './components/CasosListView';
 import { NewCaseWizard } from './components/NewCaseWizard';
 import { StudentsListView } from './components/StudentsListView';
+import { DraggableTrainingButton } from './components/DraggableTrainingButton';
+import { Five9Login } from './components/Five9Login';
 import { db } from './firebaseConfig';
-import { ChevronDown, Check, Trash2, Lock, AlertTriangle, X, Loader2 } from 'lucide-react';
+import { ChevronDown, Check, Trash2, Lock, AlertTriangle, X, Loader2, Download, Phone } from 'lucide-react';
 
 // --- Types ---
 export interface ProspectData {
@@ -27,6 +29,7 @@ export interface ProspectData {
     status?: string;
     owner?: string;
     type?: 'record' | 'new-case'; // Added to distinguish between regular records and system tabs
+    label?: string; // New field for hidden labels (e.g., "Entrenamiento")
 }
 
 export interface User {
@@ -114,6 +117,15 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User) => void }) => 
     const [resetError, setResetError] = useState('');
     const [isResetting, setIsResetting] = useState(false);
     const [resetSuccess, setResetSuccess] = useState(false);
+
+    // --- Import State for Login Screen ---
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [importStep, setImportStep] = useState<'pin' | 'form'>('pin');
+    const [importPin, setImportPin] = useState('');
+    const [importError, setImportError] = useState('');
+    const [importDataText, setImportDataText] = useState('');
+    const [isImporting, setIsImporting] = useState(false);
+    const [importSuccess, setImportSuccess] = useState(false);
 
     // Helper to sanitize email for Firebase Key
     const getEmailKey = (email: string) => btoa(email.toLowerCase().trim());
@@ -286,19 +298,141 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User) => void }) => 
         }
     };
 
+    // --- Import Logic ---
+    const handleImportPinSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        setImportError('');
+        if (importPin === '00944' || importPin === '*00944') {
+            setImportStep('form');
+        } else {
+            setImportError('PIN incorrecto. Acceso denegado.');
+        }
+    };
+
+    const handleImportDataSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setImportError('');
+        if (!importDataText.trim()) return;
+
+        setIsImporting(true);
+
+        try {
+            // Eliminar los leads de entrenamiento antiguos antes de cargar la lista nueva
+            const snapshot = await db.ref('prospects').once('value');
+            const data = snapshot.val();
+            const updates: { [key: string]: any } = {};
+
+            if (data) {
+                Object.keys(data).forEach(key => {
+                    if (data[key].label === 'Entrenamiento') {
+                        updates[`prospects/${key}`] = null; // Mark for deletion
+                    }
+                });
+            }
+
+            const rows = importDataText.split('\n');
+
+            let validCount = 0;
+            for (const row of rows) {
+                if (!row.trim()) continue; // Skip empty rows
+
+                // Split by tabs or multiple spaces
+                const columns = row.split(/\t| {2,}/).map(col => col.trim()).filter(col => col);
+
+                // Expected: Nombre, Apellido, Correo, Teléfono, País, Programa, Días
+                if (columns.length >= 7) {
+                    const newRef = db.ref('prospects').push();
+                    const key = newRef.key;
+                    if (key) {
+                        // Extract country code if present in the phone string
+                        let phoneStr = columns[3] || '';
+                        let code = '+57'; // Default
+                        let phone = phoneStr;
+
+                        const matchedCode = COUNTRY_CODES.find(c => phoneStr.startsWith(c.code));
+                        if (matchedCode) {
+                            code = matchedCode.code;
+                            phone = phoneStr.substring(matchedCode.code.length).trim();
+                        } else {
+                            // Mapping common countries to default codes if user didn't provide +
+                            const countryName = (columns[4] || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                            if (countryName.includes('colombia')) code = '+57';
+                            else if (countryName.includes('mexico')) code = '+52';
+                            else if (countryName.includes('usa') || countryName.includes('estados unidos')) code = '+1';
+                            else if (countryName.includes('espana')) code = '+34';
+                            else if (countryName.includes('peru')) code = '+51';
+                            else if (countryName.includes('ecuador')) code = '+593';
+                            else if (countryName.includes('chile')) code = '+56';
+                            else if (countryName.includes('argentina')) code = '+54';
+                        }
+
+                        // Generar días de creación aleatorios si no viene en CSV (0 a 14 días)
+                        const parsedDays = parseInt(columns[6]);
+                        const finalDays = isNaN(parsedDays) ? Math.floor(Math.random() * 15) : parsedDays;
+
+                        updates[`prospects/${key}`] = {
+                            firstName: columns[0] || '',
+                            lastName: columns[1] || '',
+                            email: columns[2] || '',
+                            phoneCode: code,
+                            phone: phone,
+                            country: columns[4] || 'Colombia',
+                            program: columns[5] || '',
+                            daysCreation: finalDays,
+                            createdAt: new Date().toISOString(),
+                            status: 'SQL', // Default assigned status
+                            owner: 'Administrador Salesforce',
+                            label: 'Entrenamiento' // Secret internal label
+                        };
+                        validCount++;
+                    }
+                }
+            }
+
+            if (validCount > 0) {
+                await db.ref().update(updates);
+                setImportSuccess(true);
+                setTimeout(() => {
+                    setImportSuccess(false);
+                    setIsImportModalOpen(false);
+                    setImportDataText('');
+                    setImportStep('pin');
+                    setImportPin('');
+                }, 3000);
+            } else {
+                setImportError('No se encontraron filas con el formato correcto (7 columnas requeridas).');
+            }
+
+        } catch (err) {
+            console.error(err);
+            setImportError('Error al importar los datos en la base de datos.');
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
     // --- RENDER ---
     return (
         <div className={`min-h-screen relative ${view === 'prospect_register' ? 'bg-[#1a242f]' : 'bg-[#f4f6f9]'} flex flex-col items-center justify-center font-sans text-[#181b25] transition-colors duration-500`}>
 
-            {/* === ADMIN RESET BUTTON (Top Right) === */}
+            {/* === ADMIN BUTTONS (Top Right) === */}
             {view !== 'prospect_register' && (
-                <button
-                    onClick={() => setIsResetModalOpen(true)}
-                    className="absolute top-4 right-4 w-10 h-10 bg-yellow-400 hover:bg-yellow-500 text-black rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-105 border-2 border-yellow-600 z-50"
-                    title="Restaurar Base de Datos (Admin)"
-                >
-                    <Trash2 size={20} strokeWidth={2.5} />
-                </button>
+                <div className="absolute top-4 right-4 flex gap-3 z-50">
+                    <button
+                        onClick={() => { setIsImportModalOpen(true); setImportStep('pin'); setImportPin(''); setImportError(''); }}
+                        className="w-10 h-10 bg-blue-500 hover:bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-105 border-2 border-blue-700"
+                        title="Importar Datos"
+                    >
+                        <Download size={20} strokeWidth={2.5} />
+                    </button>
+                    <button
+                        onClick={() => setIsResetModalOpen(true)}
+                        className="w-10 h-10 bg-yellow-400 hover:bg-yellow-500 text-black rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-105 border-2 border-yellow-600"
+                        title="Restaurar Base de Datos (Admin)"
+                    >
+                        <Trash2 size={20} strokeWidth={2.5} />
+                    </button>
+                </div>
             )}
 
             {/* Logo Area (Only for Login Views) */}
@@ -654,6 +788,131 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User) => void }) => 
                 </div>
             )}
 
+            {/* --- IMPORT MODAL --- */}
+            {isImportModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-lg shadow-2xl w-[900px] max-w-[95vw] border border-gray-200 overflow-hidden">
+                        {/* Header */}
+                        <div className="bg-blue-500 p-4 flex items-center justify-between text-white">
+                            <div className="flex items-center gap-2">
+                                <div className="bg-white p-1.5 rounded-full">
+                                    <Download size={20} className="text-blue-600" />
+                                </div>
+                                <h3 className="font-bold">Importar Datos de Excel</h3>
+                            </div>
+                            <button onClick={() => setIsImportModalOpen(false)} className="text-white/70 hover:text-white transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6">
+                            {importSuccess ? (
+                                <div className="text-center py-6 animate-in fade-in zoom-in duration-300">
+                                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <Check size={32} className="text-green-600" />
+                                    </div>
+                                    <h4 className="text-xl font-bold text-gray-800">¡Importación Exitosa!</h4>
+                                    <p className="text-sm text-gray-600 mt-2">Los datos se han cargado correctamente en la base de datos.</p>
+                                </div>
+                            ) : importStep === 'pin' ? (
+                                <form onSubmit={handleImportPinSubmit}>
+                                    <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                                        Ingresa el PIN de administrador para acceder a la importación masiva.
+                                    </p>
+
+                                    <div className="mb-4 relative">
+                                        <label className="block text-xs font-bold text-gray-700 mb-1 uppercase tracking-wide">PIN de Autorización</label>
+                                        <div className="relative">
+                                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                            <input
+                                                type="password"
+                                                className="w-full border-2 border-gray-300 rounded px-3 py-2 pl-9 text-base focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all tracking-widest"
+                                                placeholder="Ingresa el PIN"
+                                                value={importPin}
+                                                onChange={(e) => setImportPin(e.target.value)}
+                                                autoFocus
+                                            />
+                                        </div>
+                                        {importError && <div className="text-red-600 text-xs mt-1 font-medium flex items-center gap-1"><AlertTriangle size={10} /> {importError}</div>}
+                                    </div>
+
+                                    <div className="flex gap-3 justify-end mt-6">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsImportModalOpen(false)}
+                                            className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={!importPin}
+                                            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold rounded shadow-sm disabled:opacity-50 flex items-center gap-2"
+                                        >
+                                            Verificar
+                                        </button>
+                                    </div>
+                                </form>
+                            ) : (
+                                <form onSubmit={handleImportDataSubmit} className="flex flex-col h-full">
+                                    <div className="mb-4">
+                                        <h4 className="text-lg font-bold text-gray-800 mb-1">Pega tus datos aquí</h4>
+                                        <p className="text-sm text-gray-500 mb-2">
+                                            Asegúrate de copiar directamente desde Excel manteniendo el orden de las columnas:
+                                        </p>
+                                        <div className="flex gap-2 flex-wrap text-xs font-semibold">
+                                            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">Nombre</span>
+                                            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">Apellido</span>
+                                            <span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Correo</span>
+                                            <span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Teléfono</span>
+                                            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">País</span>
+                                            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">Programa</span>
+                                            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">Días de creación</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1 min-h-[300px] mb-4 relative group">
+                                        <textarea
+                                            className="w-full h-full min-h-[300px] border-2 border-indigo-100 bg-gray-50/50 rounded-xl p-4 text-sm focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100 outline-none transition-all resize-none font-mono leading-relaxed text-gray-700 custom-scrollbar shadow-inner"
+                                            placeholder="Ejemplo:&#10;Juan  Perez  juan@mail.com   3101234567  Colombia  Vibe Marketing  10&#10;Maria Gomez  maria@mail.com  5512345678  Mexico    Cash flow       5&#10;&#10;... pega cientos de filas aquí ..."
+                                            value={importDataText}
+                                            onChange={(e) => setImportDataText(e.target.value)}
+                                            autoFocus
+                                        />
+                                        {!importDataText && (
+                                            <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-10 group-focus-within:opacity-5 transition-opacity">
+                                                <Download size={120} />
+                                            </div>
+                                        )}
+                                        {importError && <div className="absolute bottom-2 left-2 right-2 bg-red-50 text-red-600 text-xs mt-1 font-medium flex items-center gap-1 p-2 rounded border border-red-200"><AlertTriangle size={14} /> {importError}</div>}
+                                    </div>
+
+                                    <div className="flex gap-3 justify-end mt-auto pt-4 border-t border-gray-100">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsImportModalOpen(false)}
+                                            className="px-6 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                            disabled={isImporting}
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={!importDataText.trim() || isImporting}
+                                            className="px-6 py-2.5 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white text-sm font-bold rounded-lg shadow-md hover:shadow-lg disabled:opacity-50 disabled:shadow-none transition-all flex items-center gap-2 transform active:scale-[0.98]"
+                                        >
+                                            {isImporting ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                                            {isImporting ? 'Procesando...' : 'Guardar y Procesar'}
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Footer (Only for Login Views) */}
             {view !== 'prospect_register' && (
                 <div className="mt-8 text-xs text-gray-500">
@@ -744,6 +1003,10 @@ const App = () => {
     // 1. User State
     const [user, setUser] = useState<User | null>(null);
 
+    // --- Simulation State ---
+    const [isSimulationActive, setIsSimulationActive] = useState(false);
+    const simulationTimerRef = useRef<NodeJS.Timeout | null>(null);
+
     // ── On app boot: clear any stale Five9 session from localStorage ──
     // This ensures the mobile phone number always starts as black (non-clickable)
     // text on every page load, regardless of what was stored in a previous session.
@@ -778,7 +1041,10 @@ const App = () => {
             // Only subscribe to real prospect records (not wizard tabs)
             if (tab.type === 'new-case') return;
 
-            const prospectRef = db.ref(`prospects/${tab.id}`);
+            // Extract the real Firebase ID if it's a simulated duplicate
+            const realId = tab.id.split('-sim-')[0];
+
+            const prospectRef = db.ref(`prospects/${realId}`);
             const listener = prospectRef.on('value', (snapshot: any) => {
                 const val = snapshot.val();
                 if (!val) return;
@@ -801,16 +1067,132 @@ const App = () => {
         };
     }, [tabs.map((t) => t.id).join(',')]); // re-run only when the list of tab IDs changes
 
+    // --- Simulation Logic ---
+    // Usamos refs para mantener el estado actual de isSimulationActive en los event listeners
+    // sin tener que recrearlos y perder el hilo de las referencias temporales
+    const isSimulationActiveRef = useRef(isSimulationActive);
+    useEffect(() => {
+        isSimulationActiveRef.current = isSimulationActive;
+    }, [isSimulationActive]);
+
+    useEffect(() => {
+        const handleStartSimulation = () => {
+            setIsSimulationActive(true);
+            // Check immediately if we are ready
+            const status = localStorage.getItem('five9_status');
+            if (status && status.startsWith('Ready')) {
+                scheduleNextCall();
+            }
+        };
+
+        const handleStopSimulation = () => {
+            setIsSimulationActive(false);
+            if (simulationTimerRef.current) {
+                clearTimeout(simulationTimerRef.current);
+                simulationTimerRef.current = null;
+            }
+        };
+
+        const handleStatusChanged = () => {
+            if (!isSimulationActiveRef.current) return;
+            const status = localStorage.getItem('five9_status');
+            // If went back to Ready, schedule a new simulated call
+            if (status && status.startsWith('Ready')) {
+                // Check if we don't already have one scheduled
+                if (!simulationTimerRef.current) {
+                    scheduleNextCall();
+                }
+            } else {
+                // If not ready, clear any pending call
+                if (simulationTimerRef.current) {
+                    clearTimeout(simulationTimerRef.current);
+                    simulationTimerRef.current = null;
+                }
+            }
+        };
+
+        window.addEventListener('five9:training_start_simulation', handleStartSimulation);
+        window.addEventListener('five9:training_stop_simulation', handleStopSimulation);
+        window.addEventListener('five9_status_changed', handleStatusChanged);
+
+        return () => {
+            window.removeEventListener('five9:training_start_simulation', handleStartSimulation);
+            window.removeEventListener('five9:training_stop_simulation', handleStopSimulation);
+            window.removeEventListener('five9_status_changed', handleStatusChanged);
+            if (simulationTimerRef.current) clearTimeout(simulationTimerRef.current);
+        };
+    }, []); // Dependencias vacías para mantener los mismos listeners y usar refs
+
+    const scheduleNextCall = () => {
+        if (simulationTimerRef.current) clearTimeout(simulationTimerRef.current);
+
+        // Random time between 15 and 30 seconds
+        const delay = Math.floor(Math.random() * (30000 - 15000 + 1)) + 15000;
+
+        simulationTimerRef.current = setTimeout(async () => {
+            simulationTimerRef.current = null;
+            // Only fire if still ready and simulation is still active
+            const status = localStorage.getItem('five9_status');
+            if (status && status.startsWith('Ready') && isSimulationActiveRef.current) {
+                triggerSimulatedCall();
+            }
+        }, delay);
+    };
+
+    const triggerSimulatedCall = async () => {
+        try {
+            // Pick a random record from DB that has label 'Entrenamiento'
+            const snapshot = await db.ref('prospects').once('value');
+            const data = snapshot.val();
+            let chosenRecord: ProspectData = DEFAULT_RECORD;
+
+            if (data) {
+                // Filter records with label 'Entrenamiento'
+                const keys = Object.keys(data);
+                const trainingKeys = keys.filter(key => data[key].label === 'Entrenamiento');
+
+                if (trainingKeys.length > 0) {
+                    const randomKey = trainingKeys[Math.floor(Math.random() * trainingKeys.length)];
+                    // Generate a unique ID so each incoming call creates a brand new tab, 
+                    // even if it's the exact same student from the database again
+                    const uniqueSimId = `${randomKey}-sim-${Date.now()}`;
+                    chosenRecord = { id: uniqueSimId, ...data[randomKey] } as ProspectData;
+                }
+            }
+
+            // 1. Open the record in Salesforce view
+            handleOpenRecord(chosenRecord);
+
+            // 1.5. Force Five9 to be maximized via event to the UtilityBar
+            window.dispatchEvent(new Event('five9:maximize'));
+
+            // 2. Dispatch event to auto-answer in Five9
+            const simulatedCallData = {
+                name: `${chosenRecord.firstName} ${chosenRecord.lastName}`,
+                number: chosenRecord.phone || '3197107191',
+                relatedTo: `Estudiante: ${chosenRecord.firstName} ${chosenRecord.lastName}`,
+                campaign: '1. Premium evento'
+            };
+            window.dispatchEvent(new CustomEvent('five9:incoming_simulation_call', { detail: simulatedCallData }));
+
+        } catch (e) {
+            console.error("Error triggering simulated call", e);
+        }
+    };
+
     // Handlers
     const handleLogin = (userData: User) => {
         setUser(userData);
     };
 
     const handleOpenRecord = (record: ProspectData) => {
-        const existing = tabs.find(t => t.id === record.id);
-        if (!existing) {
-            setTabs([...tabs, record]);
-        }
+        setTabs(prev => {
+            const existing = prev.find(t => t.id === record.id);
+            if (!existing) {
+                return [...prev, record];
+            }
+            return prev;
+        });
         setActiveTabId(record.id);
         setCurrentView('record');
     };
@@ -826,20 +1208,29 @@ const App = () => {
     };
 
     const handleTabClose = (id: string) => {
-        const newTabs = tabs.filter(t => t.id !== id);
-        setTabs(newTabs);
-        if (activeTabId === id) {
-            if (newTabs.length > 0) {
-                const lastTab = newTabs[newTabs.length - 1];
-                setActiveTabId(lastTab.id);
-                if (lastTab.type !== 'new-case') {
-                    setCurrentView('record');
+        setTabs(prevTabs => {
+            const newTabs = prevTabs.filter(t => t.id !== id);
+
+            // Handle active tab switching logic inside the state setter
+            // Wait, we can't easily do side effects directly in setTabs
+            // Let's do it outside by getting the fresh tabs
+            return newTabs;
+        });
+
+        // Safe fallback for setActiveTabId
+        setTabs(prevTabs => {
+            const newTabs = prevTabs.filter(t => t.id !== id);
+            if (activeTabId === id) {
+                if (newTabs.length > 0) {
+                    const lastTab = newTabs[newTabs.length - 1];
+                    setActiveTabId(lastTab.id);
+                    if (lastTab.type !== 'new-case') setCurrentView('record');
+                } else {
+                    setCurrentView('dashboard');
                 }
-            } else {
-                setCurrentView('dashboard');
-                setActiveTabId('');
             }
-        }
+            return newTabs;
+        });
     };
 
     const handleNavigate = (dest: string) => {
@@ -937,6 +1328,8 @@ const App = () => {
                     </button>
                 </div>
             )}
+
+            <DraggableTrainingButton />
         </div>
     );
 };
