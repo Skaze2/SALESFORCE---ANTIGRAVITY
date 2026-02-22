@@ -24,6 +24,7 @@ const getOriginByProgram = (program: string) => {
         case "Vibe Marketing": return "Juan Ads";
         case "Cash flow infinito": return "Carlos Salguero";
         case "Aprende de tus créditos y págales en tiempo récord": return "Mabel Quintero";
+        case "N/A": return "N/A";
         default: return "MPF"; // Default Fallback
     }
 };

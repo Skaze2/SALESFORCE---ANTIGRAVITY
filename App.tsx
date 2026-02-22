@@ -30,10 +30,12 @@ export interface ProspectData {
     daysCreation: number;
     createdAt: string;
     status?: string;
+    statusUpdatedAt?: string;
     owner?: string;
-    type?: 'record' | 'new-case' | 'opportunity'; // Added to distinguish between regular records and system tabs
-    label?: string; // New field for hidden labels (e.g., "Entrenamiento")
-    opportunityData?: any; // To pass the full opportunity object to the tab
+    origin?: string;
+    type?: 'record' | 'new-case' | 'opportunity';
+    label?: string;
+    opportunityData?: any;
 }
 
 export interface User {
@@ -1482,7 +1484,7 @@ const App = () => {
             <div className="flex-1 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden relative bg-[#eef1f6]">
                 {content}
             </div>
-            <UtilityBar />
+            <UtilityBar currentUser={user} onOpenRecord={handleOpenRecord} />
             <NewTaskModal
                 isOpen={isTaskModalOpen}
                 onClose={() => setIsTaskModalOpen(false)}

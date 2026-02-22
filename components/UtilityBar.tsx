@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Phone, Clock, FileText, Zap, List, UserPlus, MessageSquare, CheckSquare } from 'lucide-react';
 import { ReferidoPanel } from './ReferidoPanel';
 import { Five9Login } from './Five9Login';
+import { User as UserType, ProspectData } from '../App';
 
 const UtilityItem = ({ icon: Icon, label, onClick, isActive, className }: { icon: any, label: string, onClick?: () => void, isActive?: boolean, className?: string }) => (
     <button
@@ -13,7 +14,7 @@ const UtilityItem = ({ icon: Icon, label, onClick, isActive, className }: { icon
     </button>
 );
 
-export const UtilityBar: React.FC = () => {
+export const UtilityBar: React.FC<{ currentUser: UserType | null, onOpenRecord: (record: ProspectData) => void }> = ({ currentUser, onOpenRecord }) => {
     const [isReferidoOpen, setIsReferidoOpen] = useState(false);
     const [isFive9Mounted, setIsFive9Mounted] = useState(false);
     const [isFive9Visible, setIsFive9Visible] = useState(false);
@@ -80,7 +81,11 @@ export const UtilityBar: React.FC = () => {
                     isActive={isReferidoOpen}
                 />
                 {isReferidoOpen && (
-                    <ReferidoPanel onClose={() => setIsReferidoOpen(false)} />
+                    <ReferidoPanel
+                        currentUser={currentUser}
+                        onOpenRecord={onOpenRecord}
+                        onClose={() => setIsReferidoOpen(false)}
+                    />
                 )}
             </div>
         </div>
