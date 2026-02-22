@@ -1,18 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Bell, Plus, Star, ChevronDown, HelpCircle, Mountain, Book } from 'lucide-react';
+import { Search, Bell, Plus, Star, ChevronDown, HelpCircle, Mountain, Book, X, Check } from 'lucide-react';
 import { db } from '../firebaseConfig';
-import { ProspectData } from '../App';
+import { ProspectData, User } from '../App';
 
 interface HeaderProps {
     onOpenRecord: (record: ProspectData) => void;
+    onLogout?: () => void;
+    user?: User;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenRecord }) => {
+export const Header: React.FC<HeaderProps> = ({ onOpenRecord, onLogout, user }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [results, setResults] = useState<ProspectData[]>([]);
     const [showDropdown, setShowDropdown] = useState(false);
+    const [showUserMenu, setShowUserMenu] = useState(false);
     const [allProspects, setAllProspects] = useState<ProspectData[]>([]);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const userMenuRef = useRef<HTMLDivElement>(null);
 
     // Fetch all prospects on mount (efficient for demo size)
     useEffect(() => {
@@ -59,6 +63,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRecord }) => {
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
                 setShowDropdown(false);
+            }
+            if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+                setShowUserMenu(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -195,8 +202,11 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRecord }) => {
                 </button>
 
                 {/* Astro User Profile */}
-                <div className="relative ml-1 cursor-pointer hover:opacity-90 transition-opacity">
-                    <div className="w-[34px] h-[34px] rounded-full overflow-hidden flex items-center justify-center">
+                <div className="relative ml-1 cursor-pointer" ref={userMenuRef}>
+                    <div
+                        className="w-[34px] h-[34px] rounded-full overflow-hidden flex items-center justify-center hover:opacity-90 transition-opacity"
+                        onClick={() => setShowUserMenu(!showUserMenu)}
+                    >
                         <svg width="34" height="34" viewBox="0 0 100 100" fill="none">
                             <circle cx="50" cy="50" r="48" fill="#5A6E8B" stroke="#c9c7c5" strokeWidth="2.5" />
                             <ellipse cx="50" cy="65" rx="23" ry="28" fill="white" />
@@ -205,6 +215,66 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRecord }) => {
                             <ellipse cx="50" cy="50" rx="7" ry="4.5" fill="#5A6E8B" />
                         </svg>
                     </div>
+
+                    {/* User Menu Popover */}
+                    {showUserMenu && user && (
+                        <div className="fixed top-[50px] right-4 bg-white border border-gray-200 shadow-2xl rounded-md w-72 z-[10000] overflow-hidden font-sans cursor-default">
+                            {/* Arrow Pointer */}
+                            <div className="absolute -top-2 right-4 w-4 h-4 bg-white border-t border-l border-gray-200 transform rotate-45"></div>
+
+                            {/* Header Section */}
+                            <div className="p-4 flex items-start justify-between border-b border-gray-200 relative bg-white">
+                                <div className="flex gap-3">
+                                    <div className="w-[48px] h-[48px] rounded-full overflow-hidden flex items-center justify-center bg-[#5A6E8B] shrink-0 border-2 border-transparent">
+                                        <svg width="48" height="48" viewBox="0 0 100 100" fill="none">
+                                            <circle cx="50" cy="50" r="48" fill="#5A6E8B" />
+                                            <ellipse cx="50" cy="65" rx="23" ry="28" fill="white" />
+                                            <circle cx="35" cy="35" r="4.5" fill="white" />
+                                            <circle cx="65" cy="35" r="4.5" fill="white" />
+                                            <ellipse cx="50" cy="50" rx="7" ry="4.5" fill="#5A6E8B" />
+                                        </svg>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <h3 className="font-semibold text-[15px] text-[#0176d3]">{user.firstName} {user.lastName}</h3>
+                                        <p className="text-[13px] text-gray-700 font-medium mb-1">smartbeemo.my.salesforce.com</p>
+                                        <div className="flex gap-3 text-[13px]">
+                                            <a href="#" className="text-blue-600 hover:underline">Configuración</a>
+                                            <button onClick={() => { setShowUserMenu(false); onLogout?.(); }} className="text-blue-600 hover:underline">Cerrar sesión</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button className="text-gray-400 hover:text-gray-600 absolute top-2 right-2" onClick={() => setShowUserMenu(false)}>
+                                    <X size={16} />
+                                </button>
+                            </div>
+
+                            {/* Density Section */}
+                            <div className="bg-[#f3f3f3] px-3 py-1.5 border-b border-gray-200 uppercase text-[11px] font-bold text-gray-600 tracking-wide">
+                                DENSIDAD DE VISUALIZACIÓN
+                            </div>
+                            <div className="p-2 space-y-1">
+                                <button className="w-full text-left px-2 py-1.5 hover:bg-gray-50 flex items-center gap-2 text-[13px] font-bold text-[#181b25]">
+                                    <Check size={14} className="text-black" /> Cómoda
+                                </button>
+                                <button className="w-full text-left px-2 py-1.5 hover:bg-gray-50 flex items-center gap-2 text-[13px] text-gray-700">
+                                    <span className="w-[14px]"></span> Compacta
+                                </button>
+                            </div>
+
+                            {/* Options Section */}
+                            <div className="bg-[#f3f3f3] px-3 py-1.5 border-y border-gray-200 uppercase text-[11px] font-bold text-gray-600 tracking-wide">
+                                OPCIONES
+                            </div>
+                            <div className="p-3 bg-white space-y-2">
+                                <a href="#" className="flex flex-col gap-0.5 group">
+                                    <span className="text-[13px] text-blue-600 group-hover:underline flex items-center gap-1">Cambiar a Salesforce Classic <span className="w-3 h-3 rounded-full bg-gray-500 text-white flex items-center justify-center text-[10px] pb-0.5 opacity-80">i</span></span>
+                                </a>
+                                <a href="#" className="flex flex-col gap-0.5 group">
+                                    <span className="text-[13px] text-blue-600 group-hover:underline">Agregar nombre de usuario</span>
+                                </a>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
             </div>

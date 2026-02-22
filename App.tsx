@@ -151,11 +151,13 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User) => void }) => 
             const val = snapshot.val();
 
             if (val && val.password === password) {
-                onLoginSuccess({
+                const loggedUser = {
                     firstName: val.firstName,
                     lastName: val.lastName,
                     email: val.email
-                });
+                };
+                localStorage.setItem('salesforce_user', JSON.stringify(loggedUser));
+                onLoginSuccess(loggedUser);
             } else {
                 setError('Usuario o contraseña incorrectos. Si es tu primera vez, usa "Recuperar contraseña".');
             }
@@ -1001,7 +1003,20 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User) => void }) => 
 
 const App = () => {
     // 1. User State
-    const [user, setUser] = useState<User | null>(null);
+    const [user, setUser] = useState<User | null>(() => {
+        try {
+            const savedUser = localStorage.getItem('salesforce_user');
+            console.log("App Mounting - localStorage read:", savedUser);
+            if (savedUser) {
+                const parsed = JSON.parse(savedUser);
+                console.log("App Mounting - parsed user:", parsed);
+                return parsed;
+            }
+        } catch (e) {
+            console.error("Error parsing user from local storage", e);
+        }
+        return null; // Return null if not found or parsing fails
+    });
 
     // --- Simulation State ---
     const [isSimulationActive, setIsSimulationActive] = useState(false);
@@ -1258,6 +1273,13 @@ const App = () => {
         return <Login onLoginSuccess={handleLogin} />;
     }
 
+    const handleLogout = () => {
+        setUser(null);
+        localStorage.removeItem('salesforce_user');
+        localStorage.removeItem('five9_status');
+        window.dispatchEvent(new Event('five9_status_changed'));
+    };
+
     // Determine content
     let content;
     const activeTab = tabs.find(t => t.id === activeTabId);
@@ -1294,8 +1316,8 @@ const App = () => {
     }
 
     return (
-        <div className="flex flex-col h-screen overflow-hidden bg-white font-sans text-[#181b25]">
-            <Header onOpenRecord={handleOpenRecord} />
+        <div className="flex flex-col h-screen bg-white font-sans text-[#181b25]">
+            <Header onOpenRecord={handleOpenRecord} onLogout={handleLogout} user={user} />
             <SubHeader
                 tabs={tabs}
                 activeTabId={activeTabId}
