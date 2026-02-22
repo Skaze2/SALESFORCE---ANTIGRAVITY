@@ -60,7 +60,7 @@ export const Dashboard: React.FC = () => {
                         </div>
                         <div>
                             <div className="text-xs text-gray-500">Panel</div>
-                            <h1 className="text-xl font-bold text-gray-800">Recaudo Por Lobo - Ingresos Alternativos</h1>
+                            <h1 className="text-xl font-bold text-gray-800">Recaudo Por Lobo - Adquisiciones</h1>
                             <div className="text-xs text-gray-500 flex items-center gap-1">
                                 A fecha de 4/02/2026, 10:45 a. m. <Info size={12}/> • Visualización como Camila Patarroyo
                             </div>
@@ -120,7 +120,7 @@ export const Dashboard: React.FC = () => {
                         <BarChartRow label="Tania Rincon" value="$150" width="12%" icon />
                     </div>
                     <div className="mt-4 pt-2 border-t border-gray-100">
-                        <a href="#" className="text-xs text-blue-600 hover:underline">Ver informe (TotalInvoices Zuora - Ingresos Alternativ)</a>
+                        <a href="#" className="text-xs text-blue-600 hover:underline">Ver informe (TotalInvoices Zuora - Adquisiciones)</a>
                     </div>
                 </div>
 

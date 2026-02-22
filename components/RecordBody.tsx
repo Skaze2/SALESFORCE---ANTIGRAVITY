@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronRight, Settings, ChevronDown, Check, Pencil, Info, Phone, LayoutList, FileText, Monitor, Store, Music, Cpu, Building, Wrench, CreditCard, Send, Smartphone, Crown, FileCheck, PenTool, Briefcase, Trophy, Heart, List, Bell, StickyNote, File, Landmark, Building2, Plus, GripVertical, Cloud, Search, Calendar, Clock, User, X, ChevronLeft, Ticket, AlertCircle, AlertTriangle, Image as ImageIcon, History, RefreshCw, ArrowUp } from 'lucide-react';
+import { ChevronRight, Settings, ChevronDown, Check, Pencil, Info, Phone, LayoutList, FileText, Monitor, Store, Music, Cpu, Building, Wrench, CreditCard, Send, Smartphone, Crown, FileCheck, PenTool, Briefcase, Trophy, Heart, List, Bell, StickyNote, File, Landmark, Building2, Plus, GripVertical, Cloud, Search, Calendar, Clock, User, X, ChevronLeft, Ticket, AlertCircle, AlertTriangle, Image as ImageIcon, History, RefreshCw, ArrowUp, Mail, Lock } from 'lucide-react';
 import { NewNoteModal } from './NewNoteModal';
 import { ProspectData, User as UserType } from '../App';
 import { db } from '../firebaseConfig';
@@ -234,7 +234,7 @@ const CustomCalendar = ({ onSelect, onClose, initialDate }: { onSelect: (date: s
 };
 
 // --- QuickLinks Component ---
-const QuickLinks: React.FC<{ prospectId: string; }> = ({ prospectId }) => {
+const QuickLinks: React.FC<{ prospectId: string; onOpenRecord?: (record: any) => void; }> = ({ prospectId, onOpenRecord }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [opportunities, setOpportunities] = useState<any[]>([]);
     const [showSubMenu, setShowSubMenu] = useState<{ [key: string]: boolean }>({});
@@ -245,7 +245,10 @@ const QuickLinks: React.FC<{ prospectId: string; }> = ({ prospectId }) => {
         const handler = ref.orderByChild('createdAt').on('value', (snap: any) => {
             const val = snap.val();
             if (!val) { setOpportunities([]); return; }
-            const list = Object.values(val) as any[];
+            const list = Object.entries(val).map(([key, v]) => ({
+                ...(v as any),
+                id: key
+            }));
             // Sort newest first
             list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
             setOpportunities(list);
@@ -303,34 +306,48 @@ const QuickLinks: React.FC<{ prospectId: string; }> = ({ prospectId }) => {
         }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', alignItems: 'center' }}>
                 {visibleItems.map((item, index) => (
-                    <div key={index} onMouseEnter={() => handleMouseEnter(item.label)} onMouseLeave={() => handleMouseLeave(item.label)}>
-                        <a
-                            href="#"
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: '4px',
-                                color: '#0070d2', textDecoration: 'none',
-                                fontSize: '12px', whiteSpace: 'nowrap',
-                                padding: '2px 0',
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
-                            onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
-                        >
-                            <span style={{
-                                width: '16px', height: '16px',
-                                background: item.color,
-                                borderRadius: '2px',
-                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                flexShrink: 0,
-                            }}>
-                                <item.icon size={9} color="white" strokeWidth={2.5} />
-                            </span>
-                            <span>{item.label}</span>
-                        </a>
+                    <div
+                        key={index}
+                        className="group flex items-center h-full py-1"
+                        onMouseEnter={() => handleMouseEnter(item.label)}
+                        onMouseLeave={() => handleMouseLeave(item.label)}
+                    >
+                        <div className="relative flex items-center h-full">
+                            <a
+                                href="#"
+                                className="flex items-center gap-1 text-[#0070d2] text-xs whitespace-nowrap peer"
+                                style={{ textDecoration: 'none' }}
+                                onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
+                                onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
+                            >
+                                <span style={{
+                                    width: '16px', height: '16px',
+                                    background: item.color,
+                                    borderRadius: '2px',
+                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                    flexShrink: 0,
+                                }}>
+                                    <item.icon size={9} color="white" strokeWidth={2.5} />
+                                </span>
+                                <span>{item.label}</span>
+                            </a>
 
-                        {/* Oportunidades Popover (Full Width aligned to container) */}
+                            {/* Arrow Pointer & Bridge attached directly to link */}
+                            {showSubMenu[item.label] && item.label.includes('Oportunidades') && (
+                                <>
+                                    {/* The connection Diamond (Rhombus) perfectly aligned */}
+                                    <div className="absolute top-[calc(100%+24px)] left-1/2 transform -translate-x-1/2 -translate-y-1/2 rotate-45 w-8 h-8 bg-[#f3f3f3] border-t border-l border-gray-300 z-[9997]"></div>
+                                    <div className="absolute top-[100%] left-1/2 transform -translate-x-1/2 w-[200px] h-[40px] bg-transparent z-[9999]"></div>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Oportunidades Popover (Full Width attached to QuickLinks Container) */}
                         {showSubMenu[item.label] && item.label.includes('Oportunidades') && (
-                            <div className="absolute top-full left-[0px] right-[0px] mt-[1px] bg-white border border-gray-300 shadow-xl rounded-b-md z-[9999] overflow-hidden">
-                                <div className="p-3 bg-[#f3f3f3] border-b border-gray-200 flex justify-between items-center">
+                            <div
+                                className="absolute top-[calc(100%+2px)] left-[0px] right-[0px] bg-white border border-gray-300 shadow-2xl rounded-b-md z-[9998] overflow-visible"
+                            >
+                                <div className="p-3 bg-[#f3f3f3] border-b border-gray-200 flex justify-between items-center relative z-10 rounded-t-lg">
                                     <div className="flex items-center gap-2">
                                         <div className="w-8 h-8 bg-[#ffb74d] rounded flex items-center justify-center shadow-sm">
                                             <Crown size={18} className="text-white" />
@@ -368,7 +385,21 @@ const QuickLinks: React.FC<{ prospectId: string; }> = ({ prospectId }) => {
                                             ) : opportunities.map((opp, idx) => (
                                                 <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50 bg-white">
                                                     <td className="p-2 text-xs text-gray-500 text-center">{idx + 1}</td>
-                                                    <td className="p-2 text-xs text-blue-600 hover:underline cursor-pointer font-medium"><a href="#">{opp.name}</a></td>
+                                                    <td className="p-2 text-xs text-blue-600 hover:underline cursor-pointer font-medium">
+                                                        <a href="#" onClick={(e) => {
+                                                            e.preventDefault();
+                                                            if (onOpenRecord) {
+                                                                onOpenRecord({
+                                                                    id: opp.id,
+                                                                    type: 'opportunity',
+                                                                    firstName: opp.name,
+                                                                    lastName: '',
+                                                                    opportunityData: opp
+                                                                });
+                                                                setShowSubMenu({});
+                                                            }
+                                                        }}>{opp.name}</a>
+                                                    </td>
                                                     <td className="p-2 text-xs text-gray-800">{opp.saleType}</td>
                                                     <td className="p-2 text-xs text-gray-800">{opp.type}</td>
                                                     <td className="p-2 text-xs text-gray-800 text-right font-medium">{opp.formattedAmount}</td>
@@ -812,15 +843,8 @@ const FilesTab = () => {
     );
 };
 
-const HistoryTab = () => {
-    const history = [
-        { date: '5/02/2026, 12:38 a. m.', field: 'Estado', user: 'Camila Patarroyo', original: 'En llamada', new: 'SQL' },
-        { date: '5/02/2026, 12:38 a. m.', field: 'Propietario de la cu...', user: 'Camila Patarroyo', original: 'Camila Patarroyo', new: 'Administracion Sale...' },
-        { date: '4/02/2026, 11:58 p. m.', field: 'Estado', user: 'Camila Patarroyo', original: 'SQL', new: 'En Llamada' },
-        { date: '4/02/2026, 11:58 p. m.', field: 'Propietario de la cu...', user: 'Camila Patarroyo', original: 'Administracion Sale...', new: 'Camila Patarroyo' },
-        { date: '4/02/2026, 6:22 p. m.', field: 'Propietario de la cu...', user: 'Camila Patarroyo', original: 'Camila Patarroyo', new: 'Administracion Sale...' },
-        { date: '4/02/2026, 6:22 p. m.', field: 'Estado', user: 'Camila Patarroyo', original: 'En llamada', new: 'SQL' },
-    ];
+const HistoryTab = ({ history, onOpenHistory }: { history: any[], onOpenHistory?: () => void }) => {
+    const previewHistory = history.slice(0, 6);
 
     return (
         <div className="bg-white rounded border border-gray-200 shadow-sm">
@@ -829,36 +853,45 @@ const HistoryTab = () => {
                     <div className="w-6 h-6 bg-[#5c6bc0] rounded-[2px] flex items-center justify-center">
                         <List size={14} className="text-white" />
                     </div>
-                    <span className="font-bold text-sm text-gray-800">Historial de Cuenta personal (6+)</span>
+                    <span className="font-bold text-sm text-gray-800">Historial de Cuenta personal ({history.length}{history.length >= 6 ? '+' : ''})</span>
                 </div>
             </div>
             <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                    <thead className="bg-[#f3f3f3] border-b border-gray-200">
-                        <tr>
-                            <th className="p-2 text-xs font-bold text-gray-600">Fecha</th>
-                            <th className="p-2 text-xs font-bold text-gray-600">Campo</th>
-                            <th className="p-2 text-xs font-bold text-gray-600">Usuario</th>
-                            <th className="p-2 text-xs font-bold text-gray-600">Valor original</th>
-                            <th className="p-2 text-xs font-bold text-gray-600">Valor nuevo</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {history.map((row, idx) => (
-                            <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 text-xs">
-                                <td className="p-2 text-gray-800 whitespace-nowrap">{row.date}</td>
-                                <td className="p-2 text-gray-800">{row.field}</td>
-                                <td className="p-2"><a href="#" className="text-blue-600 hover:underline">{row.user}</a></td>
-                                <td className="p-2 text-gray-800">{row.original}</td>
-                                <td className="p-2 text-gray-800">{row.new}</td>
+                {history.length === 0 ? (
+                    <div className="p-10 flex flex-col items-center justify-center text-gray-400">
+                        <List size={36} className="mb-3 text-gray-300" />
+                        <p className="text-sm">No hay registro de historial todavía.</p>
+                    </div>
+                ) : (
+                    <table className="w-full text-left border-collapse">
+                        <thead className="bg-[#f3f3f3] border-b border-gray-200">
+                            <tr>
+                                <th className="px-2 py-1.5 text-xs font-bold text-gray-600 border-b border-gray-200">Fecha</th>
+                                <th className="px-2 py-1.5 text-xs font-bold text-gray-600 border-b border-gray-200">Campo</th>
+                                <th className="px-2 py-1.5 text-xs font-bold text-gray-600 border-b border-gray-200">Usuario</th>
+                                <th className="px-2 py-1.5 text-xs font-bold text-gray-600 border-b border-gray-200">Valor original</th>
+                                <th className="px-2 py-1.5 text-xs font-bold text-gray-600 border-b border-gray-200">Valor nuevo</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {previewHistory.map((item, index) => (
+                                <tr key={index} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 text-[13px]">
+                                    <td className="px-2 py-1 truncate">{item.date}</td>
+                                    <td className="px-2 py-1 text-gray-800">{item.field}</td>
+                                    <td className="px-2 py-1"><a href="#" className="text-blue-600 hover:underline">{item.user}</a></td>
+                                    <td className="px-2 py-1 text-gray-800">{item.original}</td>
+                                    <td className="px-2 py-1 text-gray-800">{item.new}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
             </div>
-            <div className="p-2 border-t border-gray-200 text-center">
-                <a href="#" className="text-sm text-blue-600 hover:underline">Ver todos</a>
-            </div>
+            {history.length > 0 && (
+                <div className="p-2 border-t border-gray-200 text-center">
+                    <button onClick={onOpenHistory} className="text-sm font-medium text-[#0070D2] hover:underline">Ver todos</button>
+                </div>
+            )}
         </div>
     );
 };
@@ -909,7 +942,8 @@ const ActivitySidebar: React.FC<{
     owner?: string;
     prospectName?: string;
     onTaskCreated: (subject: string) => void;
-}> = ({ currentStepName, prospectId, currentUser, daysCreation, country, owner, prospectName, onTaskCreated }) => {
+    onOpenCheckoutModal: () => void;
+}> = ({ currentStepName, prospectId, currentUser, daysCreation, country, owner, prospectName, onTaskCreated, onOpenCheckoutModal }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [saving, setSaving] = useState(false);
     const [wizardStep, setWizardStep] = useState(0);
@@ -993,8 +1027,9 @@ const ActivitySidebar: React.FC<{
         if (wizardStep === 2 && !selectedProduct) { setErrorMessage("Debes seleccionar un producto para continuar."); return; }
         if (wizardStep === 3 && !selectedOffer) { setErrorMessage("Debes seleccionar una oferta para continuar."); return; }
         if (wizardStep === 5) {
-            const randomId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-            setGeneratedLink(`https://smartbeemo.com/checkout/?subscriptionid=${randomId}`);
+            // Genera un ID único para la oportunidad/checkout atado a este cliente
+            const uniqueCheckoutId = `chk_${prospectId}_${Date.now()}`;
+            setGeneratedLink(`https://smartbeemo.com/checkout/?subscriptionid=${uniqueCheckoutId}`);
 
             // Create the Opportunity Record in Firebase
             if (selectedProduct && selectedOffer) {
@@ -1140,7 +1175,22 @@ const ActivitySidebar: React.FC<{
                             </div>
                         );
                     })()}
-                    {wizardStep === 6 && (<div className="py-4"><div className="flex items-center gap-4"><a href="#" className="text-blue-600 underline text-lg font-medium">Link</a><span className="text-gray-800 text-sm break-all">{generatedLink}</span></div></div>)}
+                    {wizardStep === 6 && (
+                        <div className="py-4">
+                            <div className="flex items-center gap-4">
+                                <button
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        onOpenCheckoutModal();
+                                    }}
+                                    className="text-blue-600 hover:text-blue-800 underline text-lg font-medium transition-colors"
+                                >
+                                    Link
+                                </button>
+                                <span className="text-gray-800 text-sm break-all">{generatedLink}</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
                 <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">{wizardStep < 6 ? (<><button onClick={wizardStep === 1 ? () => setWizardStep(0) : prevStep} className="px-4 py-1.5 border border-gray-400 rounded text-sm text-blue-600 bg-white hover:bg-gray-50 font-medium min-w-[80px]">{wizardStep === 5 ? "Ofertas" : "Volver"}</button><button onClick={nextStep} className="px-4 py-1.5 bg-[#1b5297] text-white rounded text-sm font-medium hover:bg-blue-800 shadow-sm min-w-[80px]">{wizardStep === 5 ? "Crear cotización" : "Siguiente"}</button></>) : (<button onClick={() => setWizardStep(0)} className="px-4 py-1.5 bg-[#1b5297] text-white rounded text-sm font-medium hover:bg-blue-800 shadow-sm min-w-[80px]">Finalizar</button>)}</div>
             </div>
@@ -1164,7 +1214,8 @@ const ActivitySidebar: React.FC<{
             <div className="bg-white border border-gray-300 rounded-md shadow-sm text-sm" ref={containerRef}>
                 <div className="flex bg-[#f3f3f3] border-b border-gray-300 rounded-t-md"><button className="px-4 py-2.5 bg-white border-r border-gray-300 font-bold text-gray-800 text-xs border-t-2 border-t-transparent relative -mb-[1px] border-b-white z-10 rounded-tl-md">Nueva tarea</button><button className="px-4 py-2.5 hover:bg-white text-gray-600 font-medium text-xs border-r border-gray-300">Correo electrónico</button><button className="px-4 py-2.5 hover:bg-white text-gray-600 font-medium text-xs">Nuevo evento</button></div>
                 {!isExpanded ? (<div className="p-4 border-b border-gray-200"><div className="flex gap-2 relative"><input type="text" placeholder="Crear una tarea..." onClick={handleExpand} className="flex-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none placeholder-gray-500 cursor-text" /><button onClick={handleExpand} className="bg-[#1b5297] text-white text-xs font-bold px-4 py-1.5 rounded-[4px] hover:bg-blue-800 transition-colors shadow-sm">Agregar</button></div></div>) : (
-                    <div className="p-4 border-b border-gray-200 bg-white"><div className="space-y-4"><div className="relative dropdown-container"><label className="block text-xs text-gray-600 mb-1"><span className="text-red-500 mr-0.5">*</span>Asunto</label><div className="relative"><input type="text" value={subject} onClick={() => { setShowSubjectDropdown(true); setShowDueDateCalendar(false); setShowReminderDateCalendar(false); setShowTimeDropdown(false); }} onChange={(e) => setSubject(e.target.value)} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" /><Search className="absolute right-2 top-2 text-gray-400" size={16} /></div>{showSubjectDropdown && (<div className="absolute top-full left-0 w-full bg-white border border-gray-300 shadow-lg rounded mt-1 z-50">{SUBJECT_OPTIONS.map((opt) => (<div key={opt} className="px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer flex items-center gap-2" onClick={() => { setSubject(opt); setShowSubjectDropdown(false); }}>{subject === opt && <Check size={14} className="text-blue-600" />}<span className={subject === opt ? '' : 'ml-6'}>{opt}</span></div>))}</div>)}</div><div className="relative dropdown-container"><label className="block text-xs text-gray-600 mb-1">Fecha de vencimiento</label><div className="relative"><input type="text" readOnly value={dueDate} onClick={() => { const newVal = !showDueDateCalendar; setShowDueDateCalendar(newVal); if (newVal) { setShowSubjectDropdown(false); setShowReminderDateCalendar(false); setShowTimeDropdown(false); } }} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer" /><Calendar className="absolute right-2 top-2 text-gray-500" size={16} />{showDueDateCalendar && <CustomCalendar initialDate={dueDate} onSelect={setDueDate} onClose={() => setShowDueDateCalendar(false)} />}</div></div><div><label className="flex items-center gap-2 text-sm text-gray-700 mb-2 cursor-pointer w-fit"><span>Recordatorio establecido</span></label><div className="mb-2"><input type="checkbox" checked={reminderSet} onChange={(e) => setReminderSet(e.target.checked)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" /></div>{reminderSet && (<div className="flex gap-4"><div className="flex-1 relative dropdown-container"><label className="block text-xs text-gray-600 mb-1">Fecha</label><div className="relative"><input type="text" readOnly value={reminderDate} onClick={() => { const newVal = !showReminderDateCalendar; setShowReminderDateCalendar(newVal); if (newVal) { setShowSubjectDropdown(false); setShowDueDateCalendar(false); setShowTimeDropdown(false); } }} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm outline-none cursor-pointer" /><Calendar className="absolute right-2 top-2 text-gray-500" size={16} />{showReminderDateCalendar && <CustomCalendar initialDate={reminderDate} onSelect={setReminderDate} onClose={() => setShowReminderDateCalendar(false)} />}</div></div><div className="flex-1 relative dropdown-container"><label className="block text-xs text-gray-600 mb-1">Hora</label><div className="relative"><input type="text" value={reminderTime} readOnly onClick={() => { const newVal = !showTimeDropdown; setShowTimeDropdown(newVal); if (newVal) { setShowSubjectDropdown(false); setShowDueDateCalendar(false); setShowReminderDateCalendar(false); } }} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm outline-none cursor-pointer" /><Clock className="absolute right-2 top-2 text-gray-500" size={16} />{showTimeDropdown && (<div className="absolute top-full left-0 w-full bg-white border border-gray-300 shadow-lg rounded mt-1 z-50 max-h-48 overflow-y-auto">{TIME_SLOTS.map((slot) => (<div key={slot} className={`px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer flex items-center gap-2 ${slot === reminderTime ? 'bg-blue-50' : ''}`} onClick={() => { setReminderTime(slot); setShowTimeDropdown(false); }}>{slot === reminderTime && <Check size={14} className="text-blue-600" />}<span className={slot === reminderTime ? '' : 'ml-6'}>{slot}</span></div>))}</div>)}</div></div></div>)}</div><div><label className="block text-xs text-gray-600 mb-1"><span className="text-red-500 mr-0.5">*</span>Asignado a</label><div className="border border-gray-300 rounded px-2 py-1.5 flex items-center gap-2 bg-white"><div className="w-6 h-6 bg-blue-500 rounded flex items-center justify-center"><User size={14} className="text-white" /></div><span className="text-sm text-gray-800 flex-1">{`${currentUser.firstName} ${currentUser.lastName}`.trim()}</span></div></div><div className="flex justify-end gap-2 pt-2"><button onClick={handleCollapse} className="px-4 py-1.5 border border-gray-300 rounded text-sm text-blue-600 bg-white hover:bg-gray-50 font-medium">Cancelar</button><button onClick={handleInlineSave} disabled={saving} className="px-4 py-1.5 bg-[#1b5297] text-white rounded text-sm font-medium hover:bg-blue-800 shadow-sm disabled:opacity-60">{saving ? 'Guardando...' : 'Guardar'}</button></div></div></div>)}<div className="bg-[#f3f3f3] px-4 py-2 flex items-center justify-between border-b border-gray-200"><div className="flex items-center gap-2"><div className="bg-[#5b7ecc] p-0.5 rounded-sm"><Cloud size={12} className="text-white" fill="currentColor" /></div><span className="text-gray-700 font-medium text-xs">Solo mostrar actividades con perspectivas</span><div className="w-9 h-5 bg-[#b0adab] rounded-full relative cursor-pointer hover:bg-gray-500 transition-colors"><div className="w-4 h-4 bg-white rounded-full absolute left-0.5 top-0.5 shadow-sm"></div></div></div></div><div className="px-4 py-3 bg-white"><div className="text-[11px] text-gray-500 leading-relaxed mb-2 flex items-start justify-between"><span>Filtros: En 2 meses • Todas las actividades • Llamadas registradas, Correo electrónico, Eventos, Correo electrónico de lista, Tareas, Llamadas de voz, Llamadas de vídeo y Web</span><button className="ml-2 p-1 border border-gray-300 rounded bg-white hover:bg-gray-50 text-gray-600 shrink-0 shadow-sm"><Settings size={14} /></button></div><div className="flex justify-end gap-1 text-[11px]"><a href="#" className="text-blue-600 hover:underline">Actualizar</a><span className="text-gray-400">•</span><a href="#" className="text-blue-600 hover:underline">Ampliar todo</a><span className="text-gray-400">•</span><a href="#" className="text-blue-600 hover:underline">Ver todo</a></div></div><div className="bg-[#f3f3f3] border-t border-gray-200"><button className="w-full flex items-center px-4 py-2 hover:bg-gray-200 transition-colors"><ChevronDown size={14} className="text-gray-700 mr-2" /><span className="text-xs font-bold text-gray-800">Próximas y vencidas</span></button><div className="bg-white"><div className="flex group relative"><div className="absolute left-[29px] top-8 bottom-[-10px] w-[2px] bg-[#4dbd74] z-0"></div><div className="p-4 w-full flex gap-3 z-10"><div className="shrink-0 flex items-start pt-1"><button className="mr-2 mt-0.5 text-gray-400 hover:text-gray-600"><ChevronRight size={12} /></button><div className="w-6 h-6 bg-[#4dbd74] rounded-[2px] flex items-center justify-center shadow-sm z-10 relative"><LayoutList size={14} className="text-white" /></div></div><div className="flex-1"><div className="flex items-start justify-between mb-1"><div className="flex items-center gap-2"><input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" /><a href="#" className="text-sm text-blue-600 hover:underline font-medium">Seguimiento Asignado</a></div><div className="flex items-center gap-2"><span className="text-xs text-[#c23934] font-bold">22/12/2025</span><button className="p-0.5 hover:bg-gray-100 rounded border border-gray-300 text-gray-500 bg-white"><ChevronDown size={12} /></button></div></div><div className="text-xs text-gray-800 mb-3 leading-snug"><a href="#" className="text-blue-600 hover:underline">Dahiana Pacheco</a> tiene una próxima tarea con <a href="#" className="text-blue-600 hover:underline">Ana Mis propias Finanzas Mis inversiones</a></div><button className="text-xs text-blue-600 border border-gray-300 rounded px-3 py-1 hover:bg-gray-50 font-medium bg-white">Ver más</button></div></div></div></div><div className="flex items-center justify-between px-4 py-2 bg-[#f3f3f3] border-t border-gray-200"><button className="flex items-center hover:underline"><ChevronDown size={14} className="text-gray-700 mr-2" /><span className="text-xs font-bold text-gray-800">enero • 2026</span></button><span className="text-xs font-bold text-gray-800">El mes pasado</span></div><div className="bg-white"><div className="flex group relative"><div className="absolute left-[29px] top-0 bottom-0 w-[2px] bg-[#4dbd74] z-0 h-10"></div><div className="p-4 w-full flex gap-3 z-10 pt-2"><div className="shrink-0 flex items-start pt-1"><button className="mr-2 mt-0.5 text-gray-400 hover:text-gray-600"><ChevronRight size={12} /></button><div className="w-6 h-6 bg-[#4dbd74] rounded-[2px] flex items-center justify-center shadow-sm z-10 relative"><Phone size={14} className="text-white" fill="currentColor" /></div></div><div className="flex-1"><div className="flex items-start justify-between mb-1"><a href="#" className="text-sm text-blue-600 hover:underline">Call 01/23/2026 10:45am -05</a><div className="flex items-center gap-2"><span className="text-xs text-gray-500">23/01</span><button className="p-0.5 hover:bg-gray-100 rounded border border-gray-300 text-gray-500 bg-white"><ChevronDown size={12} /></button></div></div><div className="text-xs text-gray-800">Tenía una tarea</div></div></div></div></div></div></div></div>
+                    <div className="p-4 border-b border-gray-200 bg-white"><div className="space-y-4"><div className="relative dropdown-container"><label className="block text-xs text-gray-600 mb-1"><span className="text-red-500 mr-0.5">*</span>Asunto</label><div className="relative"><input type="text" value={subject} onClick={() => { setShowSubjectDropdown(true); setShowDueDateCalendar(false); setShowReminderDateCalendar(false); setShowTimeDropdown(false); }} onChange={(e) => setSubject(e.target.value)} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" /><Search className="absolute right-2 top-2 text-gray-400" size={16} /></div>{showSubjectDropdown && (<div className="absolute top-full left-0 w-full bg-white border border-gray-300 shadow-lg rounded mt-1 z-50">{SUBJECT_OPTIONS.map((opt) => (<div key={opt} className="px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer flex items-center gap-2" onClick={() => { setSubject(opt); setShowSubjectDropdown(false); }}>{subject === opt && <Check size={14} className="text-blue-600" />}<span className={subject === opt ? '' : 'ml-6'}>{opt}</span></div>))}</div>)}</div><div className="relative dropdown-container"><label className="block text-xs text-gray-600 mb-1">Fecha de vencimiento</label><div className="relative"><input type="text" readOnly value={dueDate} onClick={() => { const newVal = !showDueDateCalendar; setShowDueDateCalendar(newVal); if (newVal) { setShowSubjectDropdown(false); setShowReminderDateCalendar(false); setShowTimeDropdown(false); } }} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer" /><Calendar className="absolute right-2 top-2 text-gray-500" size={16} />{showDueDateCalendar && <CustomCalendar initialDate={dueDate} onSelect={setDueDate} onClose={() => setShowDueDateCalendar(false)} />}</div></div><div><label className="flex items-center gap-2 text-sm text-gray-700 mb-2 cursor-pointer w-fit"><span>Recordatorio establecido</span></label><div className="mb-2"><input type="checkbox" checked={reminderSet} onChange={(e) => setReminderSet(e.target.checked)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" /></div>{reminderSet && (<div className="flex gap-4"><div className="flex-1 relative dropdown-container"><label className="block text-xs text-gray-600 mb-1">Fecha</label><div className="relative"><input type="text" readOnly value={reminderDate} onClick={() => { const newVal = !showReminderDateCalendar; setShowReminderDateCalendar(newVal); if (newVal) { setShowSubjectDropdown(false); setShowDueDateCalendar(false); setShowTimeDropdown(false); } }} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm outline-none cursor-pointer" /><Calendar className="absolute right-2 top-2 text-gray-500" size={16} />{showReminderDateCalendar && <CustomCalendar initialDate={reminderDate} onSelect={setReminderDate} onClose={() => setShowReminderDateCalendar(false)} />}</div></div><div className="flex-1 relative dropdown-container"><label className="block text-xs text-gray-600 mb-1">Hora</label><div className="relative"><input type="text" value={reminderTime} readOnly onClick={() => { const newVal = !showTimeDropdown; setShowTimeDropdown(newVal); if (newVal) { setShowSubjectDropdown(false); setShowDueDateCalendar(false); setShowReminderDateCalendar(false); } }} className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm outline-none cursor-pointer" /><Clock className="absolute right-2 top-2 text-gray-500" size={16} />{showTimeDropdown && (<div className="absolute top-full left-0 w-full bg-white border border-gray-300 shadow-lg rounded mt-1 z-50 max-h-48 overflow-y-auto">{TIME_SLOTS.map((slot) => (<div key={slot} className={`px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer flex items-center gap-2 ${slot === reminderTime ? 'bg-blue-50' : ''}`} onClick={() => { setReminderTime(slot); setShowTimeDropdown(false); }}>{slot === reminderTime && <Check size={14} className="text-blue-600" />}<span className={slot === reminderTime ? '' : 'ml-6'}>{slot}</span></div>))}</div>)}</div></div></div>)}</div><div><label className="block text-xs text-gray-600 mb-1"><span className="text-red-500 mr-0.5">*</span>Asignado a</label><div className="border border-gray-300 rounded px-2 py-1.5 flex items-center gap-2 bg-white"><div className="w-6 h-6 bg-blue-500 rounded flex items-center justify-center"><User size={14} className="text-white" /></div><span className="text-sm text-gray-800 flex-1">{`${currentUser.firstName} ${currentUser.lastName}`.trim()}</span></div></div><div className="flex justify-end gap-2 pt-2"><button onClick={handleCollapse} className="px-4 py-1.5 border border-gray-300 rounded text-sm text-blue-600 bg-white hover:bg-gray-50 font-medium">Cancelar</button><button onClick={handleInlineSave} disabled={saving} className="px-4 py-1.5 bg-[#1b5297] text-white rounded text-sm font-medium hover:bg-blue-800 shadow-sm disabled:opacity-60">{saving ? 'Guardando...' : 'Guardar'}</button></div></div></div>)}<div className="bg-[#f3f3f3] px-4 py-2 flex items-center justify-between border-b border-gray-200"><div className="flex items-center gap-2"><div className="bg-[#5b7ecc] p-0.5 rounded-sm"><Cloud size={12} className="text-white" fill="currentColor" /></div><span className="text-gray-700 font-medium text-xs">Solo mostrar actividades con perspectivas</span><div className="w-9 h-5 bg-[#b0adab] rounded-full relative cursor-pointer hover:bg-gray-500 transition-colors"><div className="w-4 h-4 bg-white rounded-full absolute left-0.5 top-0.5 shadow-sm"></div></div></div></div><div className="px-4 py-3 bg-white"><div className="text-[11px] text-gray-500 leading-relaxed mb-2 flex items-start justify-between"><span>Filtros: En 2 meses • Todas las actividades • Llamadas registradas, Correo electrónico, Eventos, Correo electrónico de lista, Tareas, Llamadas de voz, Llamadas de vídeo y Web</span><button className="ml-2 p-1 border border-gray-300 rounded bg-white hover:bg-gray-50 text-gray-600 shrink-0 shadow-sm"><Settings size={14} /></button></div><div className="flex justify-end gap-1 text-[11px]"><a href="#" className="text-blue-600 hover:underline">Actualizar</a><span className="text-gray-400">•</span><a href="#" className="text-blue-600 hover:underline">Ampliar todo</a><span className="text-gray-400">•</span><a href="#" className="text-blue-600 hover:underline">Ver todo</a></div></div><div className="bg-[#f3f3f3] border-t border-gray-200"><button className="w-full flex items-center px-4 py-2 hover:bg-gray-200 transition-colors"><ChevronDown size={14} className="text-gray-700 mr-2" /><span className="text-xs font-bold text-gray-800">Próximas y vencidas</span></button><div className="bg-white"><div className="flex group relative"><div className="absolute left-[29px] top-8 bottom-[-10px] w-[2px] bg-[#4dbd74] z-0"></div><div className="p-4 w-full flex gap-3 z-10"><div className="shrink-0 flex items-start pt-1"><button className="mr-2 mt-0.5 text-gray-400 hover:text-gray-600"><ChevronRight size={12} /></button><div className="w-6 h-6 bg-[#4dbd74] rounded-[2px] flex items-center justify-center shadow-sm z-10 relative"><LayoutList size={14} className="text-white" /></div></div><div className="flex-1"><div className="flex items-start justify-between mb-1"><div className="flex items-center gap-2"><input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" /><a href="#" className="text-sm text-blue-600 hover:underline font-medium">Seguimiento Asignado</a></div><div className="flex items-center gap-2"><span className="text-xs text-[#c23934] font-bold">22/12/2025</span><button className="p-0.5 hover:bg-gray-100 rounded border border-gray-300 text-gray-500 bg-white"><ChevronDown size={12} /></button></div></div><div className="text-xs text-gray-800 mb-3 leading-snug"><a href="#" className="text-blue-600 hover:underline">Dahiana Pacheco</a> tiene una próxima tarea con <a href="#" className="text-blue-600 hover:underline">Ana Mis propias Finanzas Mis inversiones</a></div><button className="text-xs text-blue-600 border border-gray-300 rounded px-3 py-1 hover:bg-gray-50 font-medium bg-white">Ver más</button></div></div></div></div><div className="flex items-center justify-between px-4 py-2 bg-[#f3f3f3] border-t border-gray-200"><button className="flex items-center hover:underline"><ChevronDown size={14} className="text-gray-700 mr-2" /><span className="text-xs font-bold text-gray-800">enero • 2026</span></button><span className="text-xs font-bold text-gray-800">El mes pasado</span></div><div className="bg-white"><div className="flex group relative"><div className="absolute left-[29px] top-0 bottom-0 w-[2px] bg-[#4dbd74] z-0 h-10"></div><div className="p-4 w-full flex gap-3 z-10 pt-2"><div className="shrink-0 flex items-start pt-1"><button className="mr-2 mt-0.5 text-gray-400 hover:text-gray-600"><ChevronRight size={12} /></button><div className="w-6 h-6 bg-[#4dbd74] rounded-[2px] flex items-center justify-center shadow-sm z-10 relative"><Phone size={14} className="text-white" fill="currentColor" /></div></div><div className="flex-1"><div className="flex items-start justify-between mb-1"><a href="#" className="text-sm text-blue-600 hover:underline">Call 01/23/2026 10:45am -05</a><div className="flex items-center gap-2"><span className="text-xs text-gray-500">23/01</span><button className="p-0.5 hover:bg-gray-100 rounded border border-gray-300 text-gray-500 bg-white"><ChevronDown size={12} /></button></div></div><div className="text-xs text-gray-800">Tenía una tarea</div></div></div></div></div></div></div>
+        </div>
     );
 };
 
@@ -1172,17 +1223,36 @@ export const RecordBody: React.FC<{
     data: ProspectData;
     currentUser: UserType;
     onUpdateRecord: (data: ProspectData) => void;
-}> = ({ data, currentUser, onUpdateRecord }) => {
+    onOpenRecord?: (record: any) => void;
+    onOpenHistory?: () => void;
+}> = ({ data, currentUser, onUpdateRecord, onOpenRecord, onOpenHistory }) => {
     const [activeTab, setActiveTab] = useState('Detalles');
     const [currentStep, setCurrentStep] = useState(0);
     const [showSuccessToast, setShowSuccessToast] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string | undefined>(undefined);
+    const [showCheckoutModal, setShowCheckoutModal] = useState(false);
     const [showErrorToast, setShowErrorToast] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
 
     // Notes State — Firebase real-time sync per client
     const [notes, setNotes] = useState<any[]>([]);
     const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
+
+    // History State
+    const [historyItems, setHistoryItems] = useState<any[]>([]);
+
+    useEffect(() => {
+        const ref = db.ref(`history/${data.id}`);
+        const handler = ref.orderByChild('createdAt').on('value', (snap: any) => {
+            const val = snap.val();
+            if (!val) { setHistoryItems([]); return; }
+            const list = Object.values(val) as any[];
+            // Sort descending by createdAt
+            list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            setHistoryItems(list);
+        });
+        return () => ref.off('value', handler);
+    }, [data.id]);
 
     // Subscribe to notes for this specific prospect in real-time
     useEffect(() => {
@@ -1335,10 +1405,41 @@ export const RecordBody: React.FC<{
         }
 
         try {
+            const now = new Date();
+            const dateStr = now.toLocaleString('es-CO', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: 'numeric', minute: '2-digit', hour12: true
+            }).replace(',', '');
+
+            // Record History Event - Estado
+            if (data.status !== newStatus) {
+                await db.ref(`history/${data.id}`).push({
+                    date: dateStr,
+                    field: 'Estado',
+                    user: userFullName,
+                    original: data.status,
+                    new: newStatus,
+                    createdAt: now.toISOString()
+                });
+            }
+
+            // Record History Event - Propietario
+            if (recordOwner !== newOwner) {
+                await db.ref(`history/${data.id}`).push({
+                    date: dateStr,
+                    field: 'Propietario de la cuenta',
+                    user: userFullName,
+                    original: recordOwner || 'Administrador Salesforce',
+                    new: newOwner,
+                    createdAt: new Date(now.getTime() + 1).toISOString() // offset by 1ms to maintain sort order
+                });
+            }
+
             // 1. Persist to Firebase so all agents see the change and it survives logout
             await db.ref(`prospects/${data.id}`).update({
                 status: newStatus,
-                owner: newOwner
+                owner: newOwner,
+                statusUpdatedAt: now.toISOString()
             });
 
             // 2. Update local React state to reflect immediately without a re-fetch
@@ -1358,34 +1459,34 @@ export const RecordBody: React.FC<{
     };
 
     return (
-        <div className="flex flex-col h-full bg-white relative font-sans text-[#181b25]">
+        <div className="flex flex-col bg-white relative font-sans text-[#181b25]">
             {showSuccessToast && <SuccessToast message={successMessage} onClose={() => { setShowSuccessToast(false); setSuccessMessage(undefined); }} />}
             {showErrorToast && <ErrorToast message={errorMessage} onClose={() => setShowErrorToast(false)} />}
 
             <div style={{ marginBottom: '4px', marginLeft: '8px', marginRight: '8px' }}>
-                <QuickLinks prospectId={data.id} />
+                <QuickLinks prospectId={data.id} onOpenRecord={onOpenRecord} />
             </div>
 
             <div style={{ marginBottom: '4px', marginLeft: '8px', marginRight: '8px' }}>
                 <PathBar currentStep={currentStep} onStepChange={handleStepChange} />
             </div>
 
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-1">
                 <div className="flex-[0_0_55%] flex flex-col min-w-0 bg-white border-r border-gray-200">
                     <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
 
-                    <div className="flex-1 overflow-y-auto bg-[#eef1f6] p-4">
+                    <div className="flex-1 bg-[#eef1f6] p-4 min-h-[500px]">
                         {activeTab === 'Detalles' && <DetailsTab currentStepName={STEPS[currentStep]} data={data} />}
                         {activeTab === 'Notas' && <NotesTab notes={notes} onOpenNewNote={() => setIsNoteModalOpen(true)} />}
                         {activeTab === 'Archivos' && <FilesTab />}
-                        {activeTab === 'Historial' && <HistoryTab />}
+                        {activeTab === 'Historial' && <HistoryTab history={historyItems} onOpenHistory={onOpenHistory} />}
                         {activeTab === 'Pagos' && <PaymentsTab />}
                         {activeTab === 'Controles De Auditoría' && <AuditTab />}
                     </div>
                 </div>
 
                 <div className="flex-[0_0_45%] bg-[#f3f3f3] border-l border-gray-200 flex flex-col">
-                    <div className="overflow-y-auto flex-1 p-3">
+                    <div className="flex-1 p-3">
                         <ActivitySidebar
                             key={`${data.id}-${data.owner}`}
                             currentStepName={STEPS[currentStep]}
@@ -1395,6 +1496,7 @@ export const RecordBody: React.FC<{
                             country={data.country}
                             owner={data.owner}
                             prospectName={`${data.firstName} ${data.lastName}`.trim()}
+                            onOpenCheckoutModal={() => setShowCheckoutModal(true)}
                             onTaskCreated={(subject) => {
                                 setSuccessMessage(`Se creó la tarea "${subject}"`);
                                 setShowSuccessToast(true);
@@ -1411,6 +1513,169 @@ export const RecordBody: React.FC<{
                 relatedTo={`${data.firstName} ${data.lastName}`}
                 onSave={handleAddNote}
             />
+
+            {/* Generic Checkout View Modal */}
+            {showCheckoutModal && (
+                <div className="fixed inset-0 z-[99999] bg-white animate-in fade-in zoom-in-95 duration-200 flex flex-col items-center">
+                    {/* Header */}
+                    <div className="w-full h-[70px] border-b border-gray-200 bg-white flex items-center justify-center relative shrink-0">
+                        <div className="flex items-center justify-center gap-1">
+                            <span className="text-3xl relative top-[2px]">🐝</span>
+                            <span className="font-bold text-[28px] text-gray-900 tracking-tight ml-1 font-sans">
+                                beemo<span className="text-sm align-top relative -top-[4px] ml-0.5 font-medium">™</span>
+                            </span>
+                        </div>
+                        <button
+                            onClick={() => setShowCheckoutModal(false)}
+                            className="absolute right-6 p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500 hover:text-gray-900"
+                        >
+                            <X size={24} />
+                        </button>
+                    </div>
+
+                    {/* Content Area - Scrolling */}
+                    <div className="w-full flex-1 overflow-y-auto bg-[#fafafa] flex justify-center py-10">
+                        <div className="w-full max-w-[1100px] px-6 flex gap-8">
+                            {/* Left Column: Billing Details */}
+                            <div className="flex-[0_0_65%] bg-white rounded-md shadow-sm border border-gray-200 p-8 self-start">
+                                <h2 className="text-2xl font-bold text-gray-800 mb-6 font-sans">Datos de facturación</h2>
+                                <div className="border-t border-gray-200 mb-6"></div>
+
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="font-bold text-gray-800 text-sm">Pago con Tarjeta de Crédito</h3>
+                                    <div className="flex gap-2">
+                                        <div className="h-6 w-10 bg-[#1434CB] rounded text-white text-[10px] font-bold flex items-center justify-center">VISA</div>
+                                        <div className="h-6 w-10 bg-[#EB001B] rounded flex items-center justify-center relative overflow-hidden"><div className="w-6 h-6 rounded-full bg-[#F79E1B] absolute right-[-5px] opacity-80"></div></div>
+                                        <div className="h-6 w-10 bg-[#2874C2] rounded text-white text-[8px] font-bold flex flex-col items-center justify-center leading-none"><span>AM</span><span>EX</span></div>
+                                        <div className="h-6 w-10 border border-gray-300 rounded bg-white text-orange-500 text-[8px] font-bold flex items-center justify-center">DISCOVER</div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label className="block text-[13px] text-gray-600 mb-1">País <span className="text-red-500">*</span></label>
+                                        <select className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white">
+                                            <option>Selecciona uno</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[13px] text-gray-600 mb-1">Correo Electrónico <span className="text-red-500">*</span></label>
+                                        <div className="relative">
+                                            <input type="email" value={data.email} readOnly className="w-full border border-gray-300 rounded pl-9 pr-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
+                                            <Mail className="absolute left-3 top-3 text-gray-400" size={16} />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[13px] text-gray-600 mb-1">Nombre del Tarjetahabiente <span className="text-red-500">*</span></label>
+                                        <input type="text" defaultValue={`${data.firstName} ${data.lastName}`.trim()} className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[13px] text-gray-600 mb-1">Número de Tarjeta <span className="text-red-500">*</span></label>
+                                        <div className="relative">
+                                            <input type="text" className="w-full border border-gray-300 rounded pl-9 pr-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
+                                            <CreditCard className="absolute left-3 top-3 text-gray-400" size={16} />
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <div className="flex-1">
+                                            <label className="block text-[13px] text-gray-600 mb-1">Fecha de Caducidad</label>
+                                            <select className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm focus:border-blue-500 outline-none">
+                                                <option>Mes</option>
+                                            </select>
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="block text-[13px] text-gray-600 mb-1">&nbsp;</label>
+                                            <select className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm focus:border-blue-500 outline-none">
+                                                <option>Año</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[13px] text-gray-600 mb-1">Código de Seguridad <span className="text-red-500">*</span></label>
+                                        <div className="flex items-center gap-2">
+                                            <div className="relative flex-1">
+                                                <input type="text" className="w-full border border-gray-300 rounded pl-9 pr-3 py-2.5 text-sm focus:border-blue-500 outline-none" placeholder="CVV" />
+                                                <Lock className="absolute left-3 top-3 text-gray-400" size={16} />
+                                            </div>
+                                            <div className="w-10 h-6 bg-gray-200 rounded flex items-center justify-center text-[8px] font-bold text-gray-600 border border-gray-300 shrink-0">CVV</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button className="w-full bg-[#1b44c8] hover:bg-blue-800 text-white font-bold py-3 mt-4 rounded transition-colors text-sm shadow-sm">
+                                    Realizar Pago
+                                </button>
+
+                                <div className="mt-8">
+                                    <h4 className="font-bold text-gray-800 mb-4 text-sm">También puedes pagar usando:</h4>
+                                    <button className="w-full bg-black hover:bg-gray-800 text-white font-medium py-3 rounded flex items-center justify-center gap-2 transition-colors">
+                                        <span className="text-xl font-bold">G</span> Pay
+                                    </button>
+                                </div>
+
+                                <div className="mt-8 pt-6 border-t border-gray-100">
+                                    <p className="text-[11px] text-gray-500 text-justify leading-relaxed">
+                                        Al finalizar el pago, confirmas que estás de acuerdo con que smartBeemo realice cargos automáticos a tu método de pago registrado para renovar tu suscripción de acuerdo con el plan seleccionado, ya sea mensual, semestral o anual. Detalles del acuerdo: Renovación Automática: Tu suscripción a smartBeemo se renovará automáticamente al final del período de suscripción actual, sin necesidad de acción adicional por tu parte. smartBeemo te notificará con anticipación antes de realizar cualquier cargo relacionado con la renovación de tu suscripción. smartBeemo se compromete a proteger la seguridad de tu información financiera. No almacenamos detalles completos de tarjetas de crédito o débito en nuestros servidores.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Right Column: Order Summary */}
+                            <div className="flex-[0_0_35%]  self-start">
+                                <h2 className="text-xl font-bold text-gray-800 mb-4 font-sans">Resumen del pedido</h2>
+                                <div className="border-t border-gray-200 mb-4"></div>
+
+                                <div className="space-y-4 mb-6">
+                                    <div className="flex justify-between items-start">
+                                        <div className="text-[13px] text-gray-700">Beemo Pro - 12 meses<br />Pago Inicial:</div>
+                                        <div className="font-bold text-[13px] text-gray-800">COP $159.900</div>
+                                    </div>
+                                    <div className="flex justify-between items-start">
+                                        <div className="text-[13px] text-gray-700">Cuotas Pendientes:<br />Valor: 11 x</div>
+                                        <div className="font-bold text-[13px] text-gray-800">COP $130.827,27</div>
+                                    </div>
+                                    <div className="text-[13px] text-gray-700 pt-2">
+                                        Bono: Accede 12 meses a Beemo PRO
+                                    </div>
+                                </div>
+
+                                <div className="border-t border-gray-200 my-4"></div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <div className="font-bold text-sm text-gray-800">Total a pagar ahora:</div>
+                                    <div className="font-bold text-sm text-gray-800">COP $159.900</div>
+                                </div>
+
+                                <div className="bg-[#f8f9fa] rounded p-4 text-[13px] text-gray-700 space-y-2 mb-8">
+                                    <div className="flex justify-between"><span>Periodo inicial:</span><span className="font-bold">12 meses</span></div>
+                                    <div className="flex justify-between"><span>Tipo de pago:</span><span className="font-bold">Cuotas</span></div>
+                                    <div className="flex justify-between"><span>Próximo cobro cuota:</span><span className="font-bold">22 marzo, 2026</span></div>
+                                </div>
+
+                                {/* Trust Badges */}
+                                <div className="space-y-5">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 bg-[#e8f5e9] rounded-full border-2 border-green-700 flex items-center justify-center shrink-0">
+                                            <Lock size={16} className="text-green-800" fill="currentColor" />
+                                        </div>
+                                        <div className="font-bold text-[13px] text-gray-800 leading-tight">Su información es<br />100% segura</div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 bg-[#e8f5e9] rounded-full border-2 border-green-700 flex items-center justify-center shrink-0">
+                                            <span className="text-base">👍</span>
+                                        </div>
+                                        <div className="font-bold text-[13px] text-gray-800 leading-tight">Ambiente seguro<br />y autenticado</div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 bg-[#e8f5e9] rounded-full border-2 border-green-700 flex items-center justify-center shrink-0 relative">
+                                            <span className="text-lg relative -top-0.5">🎖️</span>
+                                        </div>
+                                        <div className="font-bold text-[13px] text-gray-800 leading-tight">Contenido 100%<br />revisado y aprobado</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
-};

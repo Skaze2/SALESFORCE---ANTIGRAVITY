@@ -11,8 +11,11 @@ import { NewCaseWizard } from './components/NewCaseWizard';
 import { StudentsListView } from './components/StudentsListView';
 import { DraggableTrainingButton } from './components/DraggableTrainingButton';
 import { Five9Login } from './components/Five9Login';
+import { OpportunityDetailView } from './components/OpportunityDetailView';
+import { HistoryFullView } from './components/HistoryFullView';
+import { StatusCron } from './components/StatusCron';
 import { db } from './firebaseConfig';
-import { ChevronDown, Check, Trash2, Lock, AlertTriangle, X, Loader2, Download, Phone } from 'lucide-react';
+import { ChevronDown, Check, Trash2, Lock, AlertTriangle, X, Loader2, Download, Phone, User as UserIcon } from 'lucide-react';
 
 // --- Types ---
 export interface ProspectData {
@@ -28,14 +31,25 @@ export interface ProspectData {
     createdAt: string;
     status?: string;
     owner?: string;
-    type?: 'record' | 'new-case'; // Added to distinguish between regular records and system tabs
+    type?: 'record' | 'new-case' | 'opportunity'; // Added to distinguish between regular records and system tabs
     label?: string; // New field for hidden labels (e.g., "Entrenamiento")
+    opportunityData?: any; // To pass the full opportunity object to the tab
 }
 
 export interface User {
     firstName: string;
     lastName: string;
     email: string;
+}
+
+export interface FavoriteContext {
+    id: string; // e.g. 'students_mis_agendados'
+    name: string; // e.g. 'Mis Agendados'
+    subtitle: string; // e.g. 'Estudiantes'
+    path: {
+        view: 'record' | 'dashboard' | 'list' | 'students-list';
+        subView?: string; // e.g. the specific list filter
+    };
 }
 
 // --- Constants for Registration ---
@@ -1037,6 +1051,39 @@ const App = () => {
 
     const [currentView, setCurrentView] = useState<'record' | 'dashboard' | 'list' | 'students-list'>('dashboard');
 
+    // Favorites State
+    const [favorites, setFavorites] = useState<FavoriteContext[]>(() => {
+        try {
+            const saved = localStorage.getItem('salesforce_favorites');
+            return saved ? JSON.parse(saved) : [];
+        } catch { return []; }
+    });
+
+    // Track the active context to determine if it's already a favorite
+    const [currentContext, setCurrentContext] = useState<FavoriteContext | null>(null);
+
+    const toggleFavorite = (context: FavoriteContext) => {
+        setFavorites(prev => {
+            const isFav = prev.some(f => f.id === context.id);
+            const next = isFav ? prev.filter(f => f.id !== context.id) : [...prev, context];
+            localStorage.setItem('salesforce_favorites', JSON.stringify(next));
+            return next;
+        });
+    };
+
+    const navigateToFavorite = (fav: FavoriteContext) => {
+        if (fav.path.view === 'students-list' && fav.path.subView) {
+            const storageKey = user ? `students_view_${(user as any).id || user.email || 'default'}` : 'students_view_default';
+            localStorage.setItem(storageKey, fav.path.subView);
+            window.dispatchEvent(new CustomEvent('forceNavigateStudents', { detail: fav.path.subView }));
+        }
+        setCurrentView(fav.path.view);
+    };
+
+    // Sub-Tabs State for rendering secondary tabs under a record
+    const [historyOpenFor, setHistoryOpenFor] = useState<string[]>([]);
+    const [activeSubView, setActiveSubView] = useState<Record<string, 'main' | 'history'>>({});
+
     // 3. Modals State
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [taskToast, setTaskToast] = useState<{ visible: boolean; message: string }>({ visible: false, message: '' });
@@ -1246,6 +1293,14 @@ const App = () => {
             }
             return newTabs;
         });
+
+        // Also clean up sub-tabs
+        setHistoryOpenFor(prev => prev.filter(tid => tid !== id));
+        setActiveSubView(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
     };
 
     const handleNavigate = (dest: string) => {
@@ -1289,7 +1344,11 @@ const App = () => {
     } else if (currentView === 'list') {
         content = <CasosListView onNewCase={handleNewCase} />;
     } else if (currentView === 'students-list') {
-        content = <StudentsListView currentUser={user} onOpenRecord={handleOpenRecord} />;
+        content = <StudentsListView
+            currentUser={user}
+            onOpenRecord={handleOpenRecord}
+            onContextChange={setCurrentContext}
+        />;
     } else if (activeTab?.type === 'new-case') {
         content = (
             <NewCaseWizard
@@ -1298,18 +1357,84 @@ const App = () => {
                 currentUser={user}
             />
         );
-    } else if (activeTab) {
+    } else if (activeTab?.type === 'opportunity') {
         content = (
-            <>
-                <RecordHeader data={activeTab} onNewTaskClick={() => setIsTaskModalOpen(true)} />
-                <div className="flex-1 overflow-hidden relative">
-                    <RecordBody
-                        data={activeTab}
-                        currentUser={user}
-                        onUpdateRecord={(updated) => setTabs(tabs.map(t => t.id === updated.id ? updated : t))}
-                    />
+            <OpportunityDetailView
+                opportunity={activeTab.opportunityData}
+                onClose={() => handleTabClose(activeTab.id)}
+            />
+        );
+    } else if (activeTab) {
+        const isHistoryOpen = historyOpenFor.includes(activeTab.id);
+        const subView = activeSubView[activeTab.id] || 'main';
+
+        content = (
+            <div className="flex flex-col h-full bg-[#eef1f6] relative">
+                {/* Sub-Tabs Bar - Only show if a sub-tab is open */}
+                {isHistoryOpen && (
+                    <div className="h-[36px] bg-[#f3f3f3] border-b border-gray-300 flex items-end px-4 gap-1 shrink-0">
+                        <div
+                            onClick={() => setActiveSubView({ ...activeSubView, [activeTab.id]: 'main' })}
+                            className={`h-[32px] px-4 flex items-center gap-2 border-t border-l border-r rounded-t-lg cursor-pointer transition-colors ${subView === 'main' ? 'bg-white border-gray-300 z-10' : 'bg-[#fafafa] border-transparent hover:bg-white'}`}
+                        >
+                            <UserIcon size={14} className={subView === 'main' ? 'text-[#7f8de1]' : 'text-gray-500'} />
+                            <span className={`text-[13px] ${subView === 'main' ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
+                                {activeTab.firstName} {activeTab.lastName}
+                            </span>
+                        </div>
+
+                        <div
+                            onClick={() => setActiveSubView({ ...activeSubView, [activeTab.id]: 'history' })}
+                            className={`h-[32px] px-4 flex items-center gap-2 border-t border-l border-r rounded-t-lg cursor-pointer group transition-colors ${subView === 'history' ? 'bg-white border-gray-300 z-10' : 'bg-[#fafafa] border-transparent hover:bg-white'}`}
+                        >
+                            <div className="bg-[#5c6bc0] p-[2px] rounded-sm shrink-0">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
+                            </div>
+                            <span className={`text-[13px] ${subView === 'history' ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
+                                Historial...
+                            </span>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setHistoryOpenFor(historyOpenFor.filter(id => id !== activeTab.id));
+                                    setActiveSubView(prev => {
+                                        const next = { ...prev };
+                                        delete next[activeTab.id];
+                                        return next;
+                                    });
+                                }}
+                                className="ml-1 p-0.5 rounded-full hover:bg-gray-200 text-gray-400 group-hover:text-gray-600 transition-colors"
+                            >
+                                <X size={12} />
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex-1 relative">
+                    {subView === 'main' ? (
+                        <div className="flex flex-col h-full bg-white relative">
+                            <RecordHeader data={activeTab} onNewTaskClick={() => setIsTaskModalOpen(true)} />
+                            <div className="flex-1 relative">
+                                <RecordBody
+                                    data={activeTab}
+                                    currentUser={user}
+                                    onUpdateRecord={(updated) => setTabs(tabs.map(t => t.id === updated.id ? updated : t))}
+                                    onOpenRecord={handleOpenRecord}
+                                    onOpenHistory={() => {
+                                        if (!historyOpenFor.includes(activeTab.id)) {
+                                            setHistoryOpenFor([...historyOpenFor, activeTab.id]);
+                                        }
+                                        setActiveSubView({ ...activeSubView, [activeTab.id]: 'history' });
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    ) : (
+                        <HistoryFullView data={activeTab} />
+                    )}
                 </div>
-            </>
+            </div>
         );
     } else {
         content = <Dashboard />;
@@ -1317,7 +1442,15 @@ const App = () => {
 
     return (
         <div className="flex flex-col h-screen bg-white font-sans text-[#181b25]">
-            <Header onOpenRecord={handleOpenRecord} onLogout={handleLogout} user={user} />
+            <Header
+                onOpenRecord={handleOpenRecord}
+                onLogout={handleLogout}
+                user={user}
+                favorites={favorites}
+                currentContext={currentContext}
+                onToggleFavorite={toggleFavorite}
+                onNavigateToFavorite={navigateToFavorite}
+            />
             <SubHeader
                 tabs={tabs}
                 activeTabId={activeTabId}
@@ -1326,7 +1459,7 @@ const App = () => {
                 onNavigate={handleNavigate}
                 currentView={currentView}
             />
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative bg-[#eef1f6]">
+            <div className="flex-1 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden relative bg-[#eef1f6]">
                 {content}
             </div>
             <UtilityBar />
@@ -1352,6 +1485,7 @@ const App = () => {
             )}
 
             <DraggableTrainingButton />
+            <StatusCron />
         </div>
     );
 };

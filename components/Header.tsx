@@ -1,22 +1,37 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Bell, Plus, Star, ChevronDown, HelpCircle, Mountain, Book, X, Check } from 'lucide-react';
 import { db } from '../firebaseConfig';
-import { ProspectData, User } from '../App';
+import { ProspectData, User, FavoriteContext } from '../App';
 
 interface HeaderProps {
     onOpenRecord: (record: ProspectData) => void;
     onLogout?: () => void;
     user?: User;
+    favorites?: FavoriteContext[];
+    currentContext?: FavoriteContext | null;
+    onToggleFavorite?: (ctx: FavoriteContext) => void;
+    onNavigateToFavorite?: (fav: FavoriteContext) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenRecord, onLogout, user }) => {
+export const Header: React.FC<HeaderProps> = ({
+    onOpenRecord,
+    onLogout,
+    user,
+    favorites,
+    currentContext,
+    onToggleFavorite,
+    onNavigateToFavorite
+}) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [results, setResults] = useState<ProspectData[]>([]);
     const [showDropdown, setShowDropdown] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
+    const [showFavMenu, setShowFavMenu] = useState(false);
+    const [showFavToast, setShowFavToast] = useState<{ visible: boolean, name: string, isRemoval?: boolean }>({ visible: false, name: '' });
     const [allProspects, setAllProspects] = useState<ProspectData[]>([]);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const userMenuRef = useRef<HTMLDivElement>(null);
+    const favMenuRef = useRef<HTMLDivElement>(null);
 
     // Fetch all prospects on mount (efficient for demo size)
     useEffect(() => {
@@ -66,6 +81,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRecord, onLogout, user }) 
             }
             if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
                 setShowUserMenu(false);
+            }
+            if (favMenuRef.current && !favMenuRef.current.contains(event.target as Node)) {
+                setShowFavMenu(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -150,18 +168,101 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRecord, onLogout, user }) 
             <div className="flex items-center gap-3 sm:gap-4 text-[#747474] pr-2">
 
                 {/* Favorites Split Button */}
-                <div className="flex items-center h-[30px] bg-white border border-[#c9c7c5] rounded-[4px] overflow-hidden ml-1">
-                    <button className="px-2 h-full hover:bg-gray-100 border-r border-[#c9c7c5] flex items-center justify-center">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#747474" strokeWidth="2.5" strokeLinejoin="round">
+                <div className="relative flex items-center h-[30px] bg-white border border-[#c9c7c5] rounded-[4px] ml-1" ref={favMenuRef}>
+                    {/* The Star Button */}
+                    <button
+                        onClick={() => {
+                            if (currentContext && onToggleFavorite) {
+                                const isAdded = !favorites?.some(f => f.id === currentContext.id);
+                                onToggleFavorite(currentContext);
+                                setShowFavToast({ visible: true, name: currentContext.name, isRemoval: !isAdded });
+                                setTimeout(() => setShowFavToast({ visible: false, name: '' }), 4000);
+                            }
+                        }}
+                        disabled={!currentContext}
+                        className={`px-2 h-full border-r border-[#c9c7c5] flex items-center justify-center transition-colors rounded-l-[3px] 
+                            ${!currentContext ? 'opacity-50 cursor-not-allowed bg-gray-50' :
+                                currentContext && favorites?.some(f => f.id === currentContext.id) ? 'bg-[#0176d3] hover:bg-[#014486] border-[#0176d3]' : 'hover:bg-gray-100'}`}
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24"
+                            fill={currentContext && favorites?.some(f => f.id === currentContext.id) ? 'white' : 'none'}
+                            stroke={currentContext && favorites?.some(f => f.id === currentContext.id) ? 'white' : '#747474'}
+                            strokeWidth="2.5" strokeLinejoin="round">
                             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                         </svg>
                     </button>
-                    <button className="px-1.5 h-full hover:bg-gray-100 flex items-center justify-center">
+                    {/* The Dropdown Arrow Button */}
+                    <button
+                        onClick={() => setShowFavMenu(!showFavMenu)}
+                        className="px-1.5 h-full hover:bg-gray-100 flex items-center justify-center rounded-r-[3px]"
+                    >
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="#747474">
                             <path d="M4 8L12 16L20 8Z" />
                         </svg>
                     </button>
+
+                    {/* Favorites Dropdown Menu */}
+                    {showFavMenu && (
+                        <div className="absolute top-[34px] left-0 mt-1 w-64 bg-white border border-gray-300 rounded shadow-xl z-50 animate-in fade-in zoom-in-95 duration-100 flex flex-col pt-2 block text-left">
+                            <div className="absolute -top-2 left-6 w-3 h-3 bg-white border-t border-l border-gray-300 transform rotate-45 z-[-1]"></div>
+                            <div className="px-3 py-1 text-[11px] font-bold text-gray-500 uppercase tracking-wide">
+                                Mis Favoritos
+                            </div>
+                            <div className="max-h-64 overflow-y-auto mt-2">
+                                {favorites && favorites.length > 0 ? (
+                                    favorites.map(fav => (
+                                        <div
+                                            key={fav.id}
+                                            onClick={() => {
+                                                if (onNavigateToFavorite) onNavigateToFavorite(fav);
+                                                setShowFavMenu(false);
+                                            }}
+                                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center gap-3"
+                                        >
+                                            <div className="w-8 h-8 bg-[#7f8de1] rounded-[4px] flex items-center justify-center shrink-0">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                                            </div>
+                                            <div className="flex flex-col truncate">
+                                                <span className="text-sm text-gray-900 font-medium truncate">{fav.name}</span>
+                                                <span className="text-[12px] text-gray-500 truncate">{fav.subtitle}</span>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="px-4 py-3 text-sm text-gray-500">
+                                        No tienes favoritos, haz clic sobre la estrella para agregar alguno.
+                                    </div>
+                                )}
+                            </div>
+                            <div className="border-t border-gray-200 mt-2">
+                                <button className="w-full text-left px-4 py-2 text-sm text-[#0176d3] hover:bg-gray-50 font-medium flex items-center gap-2">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                                    Modificar favoritos
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
+
+                {/* Toast Notification */}
+                {showFavToast.visible && (
+                    <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[200] flex items-center justify-between gap-4 bg-[#04844b] text-white px-4 py-2.5 rounded border border-[#006037] shadow-lg min-w-[340px] animate-in fade-in slide-in-from-top-4 duration-300">
+                        <div className="flex items-center gap-2">
+                            <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center shrink-0">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#04844b" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                            </div>
+                            <span className="text-sm font-medium">
+                                Se ha {showFavToast.isRemoval ? 'eliminado' : 'agregado'} "{showFavToast.name}" {showFavToast.isRemoval ? 'de' : 'a'} sus favoritos.
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {!showFavToast.isRemoval && <button className="text-white hover:underline text-sm font-bold">Modificar</button>}
+                            <button onClick={() => setShowFavToast({ visible: false, name: '' })} className="text-white/80 hover:text-white p-0.5 ml-2">
+                                <X size={16} />
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Global Actions (Plus) */}
                 <button className="w-[30px] h-[30px] bg-[#969492] hover:bg-[#747474] rounded-[4px] flex items-center justify-center transition-colors shadow-sm">

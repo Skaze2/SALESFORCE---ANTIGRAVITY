@@ -1,16 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Building, ChevronDown, Pin, Search, Settings, LayoutList, RefreshCw, Edit, Filter, Check, ArrowUp } from 'lucide-react';
 import { db } from '../firebaseConfig';
-import { ProspectData, User } from '../App';
+import { ProspectData, User, FavoriteContext } from '../App';
 
 type ViewType = 'recent' | 'en_llamada' | 'mis_agendados' | 'mis_asignados';
 
 interface StudentsListViewProps {
     currentUser: User;
     onOpenRecord: (record: ProspectData) => void;
+    onContextChange?: (ctx: FavoriteContext | null) => void;
 }
 
-export const StudentsListView: React.FC<StudentsListViewProps> = ({ currentUser, onOpenRecord }) => {
+export const StudentsListView: React.FC<StudentsListViewProps> = ({ currentUser, onOpenRecord, onContextChange }) => {
     // Persist filter per-agent in localStorage so navigating away and back keeps the same filter
     const storageKey = `students_view_${currentUser.id || currentUser.email || 'default'}`;
     const [currentView, setCurrentView] = useState<ViewType>(() => {
@@ -25,6 +26,42 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ currentUser,
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [allProspects, setAllProspects] = useState<ProspectData[]>([]);
     const menuRef = useRef<HTMLDivElement>(null);
+
+    // --- Listen for Force Nav from Favorites ---
+    useEffect(() => {
+        const handleForceNav = (e: CustomEvent) => {
+            setCurrentView(e.detail as ViewType);
+            localStorage.setItem(storageKey, e.detail);
+        };
+        window.addEventListener('forceNavigateStudents', handleForceNav as EventListener);
+        return () => window.removeEventListener('forceNavigateStudents', handleForceNav as EventListener);
+    }, [storageKey]);
+
+    // --- Report Context for Favorites ---
+    useEffect(() => {
+        if (onContextChange) {
+            const viewNames: Record<ViewType, string> = {
+                'recent': 'Vistos recientemente',
+                'en_llamada': 'En Llamada',
+                'mis_agendados': 'Mis Agendados',
+                'mis_asignados': 'Mis Asignados'
+            };
+
+            onContextChange({
+                id: `students_${currentView}`,
+                name: viewNames[currentView],
+                subtitle: 'Estudiantes',
+                path: {
+                    view: 'students-list',
+                    subView: currentView
+                }
+            });
+        }
+        // Cleanup when unmounting
+        return () => {
+            if (onContextChange) onContextChange(null);
+        };
+    }, [currentView, onContextChange]);
 
     // Click outside logic for menu
     useEffect(() => {
@@ -105,7 +142,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ currentUser,
                 return {
                     title: 'En Llamada',
                     subtitle: `${countText} • Ordenado por Nombre de la cuenta • Filtrado por Estado • Se actualizó hace unos segundos`,
-                    type: filteredData.length === 0 ? 'empty' : 'standard' // En llamada usually uses standard view in SF unless customized
+                    type: filteredData.length === 0 ? 'empty' : 'status_table'
                 };
             case 'mis_agendados':
                 return {
@@ -366,7 +403,7 @@ export const StudentsListView: React.FC<StudentsListViewProps> = ({ currentUser,
                                         </button>
                                     </td>
                                     <td className="p-2 text-gray-800 bg-white group-hover:bg-gray-50">
-                                        {formatDate(row.createdAt)}
+                                        {formatDate(row.statusUpdatedAt || row.createdAt)}
                                     </td>
                                     <td className="p-2 text-center relative bg-white group-hover:bg-gray-50">
                                         <button className="text-gray-400 hover:text-[#0070d2] border border-transparent hover:border-gray-300 hover:bg-white rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
