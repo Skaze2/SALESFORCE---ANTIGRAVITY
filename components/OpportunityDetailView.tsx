@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { X, Lock, Info, Check, AlertCircle } from 'lucide-react';
+import { db } from '../firebaseConfig';
+import { CheckoutModal } from './CheckoutModal';
 
 interface OpportunityDetailViewProps {
     opportunity: any;
@@ -13,6 +16,20 @@ const CheckIcon = ({ size = 16, className = "" }: { size?: number, className?: s
 );
 
 export const OpportunityDetailView: React.FC<OpportunityDetailViewProps> = ({ opportunity, onClose }) => {
+    const [showLinkPopup, setShowLinkPopup] = useState(false);
+    const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+    const [activeCheckoutData, setActiveCheckoutData] = useState<any>(null);
+
+    // Fetch checkout data if available (using common pattern for this app)
+    useEffect(() => {
+        // We need the parent prospect ID if we want to fetch the checkout snapshot
+        // For now, if the opportunity has its own checkout snapshot or we use the linked paymentLink
+        // The user wants it based on FIGMA/Image which shows a static URL if not dynamic.
+        // Let's try to find it by prospectId if we had it, but for opportunity view we'll use the opportunity data.
+    }, []);
+
+    const paymentLink = opportunity?.paymentLink || "https://smartbeemo.com/checkout/?subscriptionid=8a36979b9c76bae7019c86b4a8bd1212";
+
     return (
         <div className="flex flex-col h-full bg-[#f3f2f2] overflow-y-auto">
             {/* Cabecera Principal */}
@@ -32,7 +49,10 @@ export const OpportunityDetailView: React.FC<OpportunityDetailViewProps> = ({ op
                         </div>
                     </div>
                     <div>
-                        <button className="px-4 py-1.5 border border-gray-300 rounded text-sm text-[#0070d2] bg-white hover:bg-gray-50 transition-colors">
+                        <button
+                            onClick={() => setShowLinkPopup(true)}
+                            className="px-4 py-1.5 border border-gray-300 rounded text-sm text-[#0070d2] bg-white hover:bg-gray-50 transition-colors"
+                        >
                             Link de pago
                         </button>
                     </div>
@@ -389,6 +409,72 @@ export const OpportunityDetailView: React.FC<OpportunityDetailViewProps> = ({ op
                     </div>
                 </div>
             </div>
+            {/* Popup Centrado: Link de pago */}
+            {showLinkPopup && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[500] p-4">
+                    <div className="bg-white rounded-lg shadow-2xl w-full max-w-[700px] overflow-hidden animate-in fade-in zoom-in duration-200 border-t-[6px] border-[#ffc107]">
+                        <div className="p-4 flex justify-between items-center border-b border-gray-100">
+                            <h2 className="text-xl font-bold text-gray-800 font-sans mx-auto pl-8">Link de pago</h2>
+                            <button onClick={() => setShowLinkPopup(false)} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+                                <X size={20} className="text-gray-500" />
+                            </button>
+                        </div>
+
+                        <div className="p-8 pb-10">
+                            <div className="flex items-center gap-12">
+                                <div className="flex flex-col items-center gap-2">
+                                    <div className="w-16 h-16 bg-white border-2 border-black rounded-full flex items-center justify-center shadow-sm">
+                                        <div className="w-12 h-12 bg-yellow-400 rounded-full flex items-center justify-center text-3xl">🐝</div>
+                                    </div>
+                                    <button
+                                        onClick={() => { setShowLinkPopup(false); setShowCheckoutModal(true); }}
+                                        className="text-[#0070d2] font-semibold text-sm hover:underline mt-2"
+                                    >
+                                        Link
+                                    </button>
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="text-[#ffc107] text-2xl font-bold mb-4">Link de pago</h3>
+                                    <div className="bg-white border border-gray-200 rounded px-4 py-3 text-gray-600 text-sm break-all font-mono">
+                                        {paymentLink}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-4 bg-gray-50 flex justify-end">
+                            <button
+                                onClick={() => setShowLinkPopup(false)}
+                                className="px-8 py-2 bg-[#155cb4] text-white rounded font-bold text-sm hover:bg-[#104b96] transition-colors shadow-sm"
+                            >
+                                Finalizar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Checkout (Pantalla Completa - Unificado) */}
+            <CheckoutModal
+                isOpen={showCheckoutModal}
+                onClose={() => setShowCheckoutModal(false)}
+                data={{
+                    firstName: opportunity?.firstName || '', // Opportunity might not have firstName/lastName directly if it's not the prospect object, need to ensure data source.
+                    lastName: '',                             // Usually prospectName is a combined field in our data.
+                    email: opportunity?.email || ''
+                }}
+                checkoutData={opportunity ? {
+                    productName: opportunity.productName,
+                    initialFee: opportunity.initialPayment,
+                    quotaValue: opportunity.installmentAmount,
+                    quotasCount: opportunity.quotasCount,
+                    currency: opportunity.currency || 'COP',
+                    nextQuotaDate: (() => {
+                        const d = new Date();
+                        return new Date(d.getFullYear(), d.getMonth() + 1, d.getDate()).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+                    })()
+                } : null}
+            />
         </div>
     );
 };

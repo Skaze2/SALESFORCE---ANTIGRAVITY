@@ -1045,16 +1045,29 @@ const App = () => {
     }, []);
 
     // 2. Navigation / Tabs State
-    // Start with no open tabs; the default view is the dashboard (Inicio)
-    const [tabs, setTabs] = useState<ProspectData[]>([]);
-    const [activeTabId, setActiveTabId] = useState<string>('');
+    // Prefixes for per-user persistence
+    const storagePrefix = user ? `salesforce_${(user as any).id || user.email || 'default'}` : 'salesforce_default';
 
-    const [currentView, setCurrentView] = useState<'record' | 'dashboard' | 'list' | 'students-list'>('dashboard');
+    // Start with open tabs; initialize from localStorage if available
+    const [tabs, setTabs] = useState<ProspectData[]>(() => {
+        try {
+            const savedTabs = localStorage.getItem(`${storagePrefix}_tabs`);
+            return savedTabs ? JSON.parse(savedTabs) : [];
+        } catch { return []; }
+    });
 
-    // Favorites State
+    const [activeTabId, setActiveTabId] = useState<string>(() => {
+        return localStorage.getItem(`${storagePrefix}_activeTabId`) || '';
+    });
+
+    const [currentView, setCurrentView] = useState<'record' | 'dashboard' | 'list' | 'students-list'>(() => {
+        return (localStorage.getItem(`${storagePrefix}_currentView`) as any) || 'dashboard';
+    });
+
+    // Favorites State - initialize from user-specific key
     const [favorites, setFavorites] = useState<FavoriteContext[]>(() => {
         try {
-            const saved = localStorage.getItem('salesforce_favorites');
+            const saved = localStorage.getItem(`${storagePrefix}_favorites`);
             return saved ? JSON.parse(saved) : [];
         } catch { return []; }
     });
@@ -1062,12 +1075,19 @@ const App = () => {
     // Track the active context to determine if it's already a favorite
     const [currentContext, setCurrentContext] = useState<FavoriteContext | null>(null);
 
+    // Save tabs, active view state and favorites whenever they change
+    useEffect(() => {
+        if (!user) return;
+        localStorage.setItem(`${storagePrefix}_tabs`, JSON.stringify(tabs));
+        localStorage.setItem(`${storagePrefix}_activeTabId`, activeTabId);
+        localStorage.setItem(`${storagePrefix}_currentView`, currentView);
+        localStorage.setItem(`${storagePrefix}_favorites`, JSON.stringify(favorites));
+    }, [tabs, activeTabId, currentView, favorites, storagePrefix, user]);
+
     const toggleFavorite = (context: FavoriteContext) => {
         setFavorites(prev => {
             const isFav = prev.some(f => f.id === context.id);
-            const next = isFav ? prev.filter(f => f.id !== context.id) : [...prev, context];
-            localStorage.setItem('salesforce_favorites', JSON.stringify(next));
-            return next;
+            return isFav ? prev.filter(f => f.id !== context.id) : [...prev, context];
         });
     };
 

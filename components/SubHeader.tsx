@@ -69,8 +69,28 @@ export const SubHeader: React.FC<SubHeaderProps> = ({ tabs, activeTabId, onTabCl
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const visibleTabs = tabs.slice(0, 6);
-    const overflowTabs = tabs.slice(6);
+    // --- Overflow Logic ---
+    const MAX_VISIBLE = 7;
+    let visibleTabs: ProspectData[] = [];
+    let overflowTabs: ProspectData[] = [];
+
+    if (tabs.length <= MAX_VISIBLE) {
+        visibleTabs = tabs;
+        overflowTabs = [];
+    } else {
+        // Find if active tab is beyond the limit
+        const activeIdx = tabs.findIndex(t => t.id === activeTabId);
+        if (activeIdx >= MAX_VISIBLE) {
+            // Active tab is in overflow. Bring it to the front of visible.
+            const activeTab = tabs[activeIdx];
+            const otherTabs = tabs.filter(t => t.id !== activeTabId);
+            visibleTabs = [activeTab, ...otherTabs.slice(0, MAX_VISIBLE - 1)];
+            overflowTabs = otherTabs.slice(MAX_VISIBLE - 1);
+        } else {
+            visibleTabs = tabs.slice(0, MAX_VISIBLE);
+            overflowTabs = tabs.slice(MAX_VISIBLE);
+        }
+    }
 
     // Determine if the Nav Item should look active
     const isNavActive =
@@ -149,9 +169,8 @@ export const SubHeader: React.FC<SubHeaderProps> = ({ tabs, activeTabId, onTabCl
             </div>
 
             {/* Dynamic Tabs Area */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex overflow-hidden">
                 {visibleTabs.map((tab) => {
-                    // Active state depends on currentView being 'record' AND matching ID
                     const isActive = (currentView === undefined || currentView === 'record') && tab.id === activeTabId;
                     const isNewCase = tab.type === 'new-case';
                     const isOpportunity = tab.type === 'opportunity';
@@ -161,12 +180,12 @@ export const SubHeader: React.FC<SubHeaderProps> = ({ tabs, activeTabId, onTabCl
                             key={tab.id}
                             onClick={() => onTabClick(tab.id)}
                             className={`
-                        h-full flex items-center px-3 border-r border-gray-200 min-w-[150px] max-w-[200px] justify-between relative cursor-pointer group flex-1
-                        ${isActive ? 'bg-[#eef1f6] border-t-2 border-t-blue-500' : 'bg-white hover:bg-gray-50 border-t-2 border-t-transparent'}
-                    `}
+                                h-full flex items-center px-4 border-r border-gray-200 min-w-[140px] max-w-[200px] justify-between relative cursor-pointer group
+                                ${isActive ? 'bg-[#eef1f6] border-t-2 border-t-blue-500' : 'bg-white hover:bg-gray-50 border-t-2 border-t-transparent'}
+                            `}
                             title={isNewCase ? 'Nuevo Caso' : isOpportunity ? tab.firstName : `${tab.firstName} ${tab.lastName}`}
                         >
-                            <div className="flex items-center gap-2 overflow-hidden">
+                            <div className="flex items-center gap-2 overflow-hidden mr-1">
                                 {isNewCase ? (
                                     <div className="bg-[#f56c8d] p-0.5 rounded-sm shrink-0">
                                         <Briefcase size={12} className="text-white" />
@@ -180,54 +199,54 @@ export const SubHeader: React.FC<SubHeaderProps> = ({ tabs, activeTabId, onTabCl
                                         <User size={12} className="text-white" />
                                     </div>
                                 )}
-                                <span className={`truncate text-xs ${isActive ? 'font-medium text-gray-800' : 'text-gray-600'}`}>
+                                <span className={`truncate text-[12px] ${isActive ? 'font-semibold text-gray-800' : 'text-gray-600'}`}>
                                     {isNewCase ? 'Nuevo Caso' : isOpportunity ? tab.firstName : `${tab.firstName} ${tab.lastName}`}
                                 </span>
                             </div>
-                            <div className="flex items-center ml-2">
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onTabClose(tab.id);
-                                    }}
-                                    className="p-0.5 rounded hover:bg-gray-200 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                    <X size={14} />
-                                </button>
-                            </div>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onTabClose(tab.id);
+                                }}
+                                className="p-1 rounded-sm hover:bg-gray-200 text-gray-400 group-hover:text-gray-600 transition-colors shrink-0"
+                            >
+                                <X size={12} />
+                            </button>
                         </div>
                     );
                 })}
+            </div>
 
-                {/* Overflow Dropdown Trigger */}
-                {overflowTabs.length > 0 && (
-                    <div className="relative h-full" ref={dropdownRef}>
-                        <div
-                            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                            className={`
-                        h-full flex items-center px-3 border-r border-gray-200 cursor-pointer hover:bg-gray-50 gap-1
-                        ${isDropdownOpen ? 'bg-gray-100' : 'bg-white'}
-                    `}
-                        >
-                            <span className="text-xs text-gray-700">Más</span>
-                            <ChevronDown size={14} className="text-gray-500" />
-                        </div>
+            {/* Overflow Dropdown - OUTSIDE of the hidden container to prevent clipping */}
+            {overflowTabs.length > 0 && (
+                <div className="relative h-full shrink-0" ref={dropdownRef}>
+                    <div
+                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                        className={`
+                            h-full flex items-center px-4 border-l border-r border-gray-200 cursor-pointer hover:bg-gray-50 gap-2 transition-colors
+                            ${isDropdownOpen ? 'bg-gray-100' : 'bg-white'}
+                        `}
+                    >
+                        <span className="text-xs font-medium text-gray-700">Más</span>
+                        <ChevronDown size={14} className={`text-gray-500 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                    </div>
 
-                        {/* Overflow Dropdown Menu */}
-                        {isDropdownOpen && (
-                            <div className="absolute top-full right-0 mt-1 w-[300px] bg-white border border-gray-200 shadow-lg rounded z-50 py-1 max-h-[400px] overflow-y-auto">
-                                {overflowTabs.map((tab) => {
-                                    const isNewCase = tab.type === 'new-case';
-                                    const isOpportunity = tab.type === 'opportunity';
-                                    return (
-                                        <div
-                                            key={tab.id}
-                                            onClick={() => {
-                                                onTabClick(tab.id);
-                                                setIsDropdownOpen(false);
-                                            }}
-                                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center gap-3 border-b border-gray-50 last:border-0"
-                                        >
+                    {/* Overflow Dropdown Menu */}
+                    {isDropdownOpen && (
+                        <div className="absolute top-[40px] right-2 w-[340px] bg-white border border-gray-300 shadow-[0_4px_12px_rgba(0,0,0,0.15)] rounded-b-md z-[100] py-1 max-h-[450px] overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-150">
+                            {overflowTabs.map((tab) => {
+                                const isNewCase = tab.type === 'new-case';
+                                const isOpportunity = tab.type === 'opportunity';
+                                return (
+                                    <div
+                                        key={tab.id}
+                                        onClick={() => {
+                                            onTabClick(tab.id);
+                                            setIsDropdownOpen(false);
+                                        }}
+                                        className="px-4 py-3 hover:bg-[#F3F3F2] cursor-pointer flex items-center justify-between group border-b border-gray-50 last:border-0"
+                                    >
+                                        <div className="flex items-center gap-3 overflow-hidden">
                                             {/* Icon */}
                                             {isNewCase ? (
                                                 <div className="bg-[#f56c8d] p-1 rounded-sm shrink-0">
@@ -243,21 +262,30 @@ export const SubHeader: React.FC<SubHeaderProps> = ({ tabs, activeTabId, onTabCl
                                                 </div>
                                             )}
                                             <div className="flex flex-col overflow-hidden">
-                                                <span className="text-sm text-gray-800 truncate">
+                                                <span className="text-[13px] font-medium text-gray-800 truncate leading-tight">
                                                     {isNewCase ? 'Nuevo Caso' : isOpportunity ? tab.firstName : `${tab.firstName} ${tab.lastName}`}
                                                 </span>
-                                                <span className="text-xs text-gray-500">
+                                                <span className="text-[11px] text-gray-500 uppercase tracking-tighter">
                                                     {isNewCase ? 'Registro' : isOpportunity ? 'Oportunidad' : 'Estudiante'}
                                                 </span>
                                             </div>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onTabClose(tab.id);
+                                            }}
+                                            className="ml-4 p-1 rounded hover:bg-gray-200 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

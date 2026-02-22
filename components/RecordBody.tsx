@@ -3,6 +3,7 @@ import { ChevronRight, Settings, ChevronDown, Check, Pencil, Info, Phone, Layout
 import { NewNoteModal } from './NewNoteModal';
 import { ProspectData, User as UserType } from '../App';
 import { db } from '../firebaseConfig';
+import { CheckoutModal } from './CheckoutModal';
 
 // --- Constants ---
 const STEPS = ['MQL', 'SQL', 'En llamada', 'Agendado', 'Asignado'];
@@ -1072,11 +1073,34 @@ const ActivitySidebar: React.FC<{
                     createdDisplay: createdDisplay,
                     closeDate: closeDateDisplay,
                     subNumber: `A-S00${Math.floor(Math.random() * 900000) + 100000}`,
+                    paymentLink: `https://smartbeemo.com/checkout/?subscriptionid=chk_${prospectId}_${Date.now()}`,
+                    productName: selectedProduct.name,
+                    initialPayment: formatOfferMoney(initialFee).replace(/[^\d.,]/g, ''),
+                    installmentAmount: formatOfferMoney((selectedOffer.total - initialFee) / 11).replace(/[^\d.,]/g, ''),
+                    quotasCount: 11,
                     createdAt: now.toISOString()
                 };
 
                 db.ref(`opportunities/${prospectId}`).push(opportunity).catch(err => {
                     console.error("Error creating opportunity:", err);
+                });
+
+                // Also save the specific checkout snapshot for the modal
+                const perInstallment = (selectedOffer.total - initialFee) / 11;
+                const checkoutSnapshot = {
+                    productId: selectedProduct.id,
+                    productName: selectedProduct.name,
+                    offerName: selectedOffer.name,
+                    totalAmount: selectedOffer.total,
+                    initialFee: initialFee,
+                    quotasCount: 11,
+                    quotaValue: perInstallment,
+                    currency: offerCurrency,
+                    generatedAt: now.toISOString(),
+                    nextQuotaDate: new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })
+                };
+                db.ref(`checkouts/${prospectId}`).set(checkoutSnapshot).catch(err => {
+                    console.error("Error saving checkout snapshot:", err);
                 });
             }
         }
@@ -1236,6 +1260,7 @@ export const RecordBody: React.FC<{
     const [showSuccessToast, setShowSuccessToast] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string | undefined>(undefined);
     const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+    const [activeCheckoutData, setActiveCheckoutData] = useState<any>(null);
     const [showErrorToast, setShowErrorToast] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
 
@@ -1269,6 +1294,15 @@ export const RecordBody: React.FC<{
             // Sort newest first
             list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
             setNotes(list);
+        });
+        return () => ref.off('value', handler);
+    }, [data.id]);
+
+    // Subscribe to checkout data for this specific prospect
+    useEffect(() => {
+        const ref = db.ref(`checkouts/${data.id}`);
+        const handler = ref.on('value', (snap: any) => {
+            setActiveCheckoutData(snap.val());
         });
         return () => ref.off('value', handler);
     }, [data.id]);
@@ -1520,168 +1554,19 @@ export const RecordBody: React.FC<{
             />
 
             {/* Generic Checkout View Modal */}
-            {showCheckoutModal && (
-                <div className="fixed inset-0 z-[99999] bg-white animate-in fade-in zoom-in-95 duration-200 flex flex-col items-center">
-                    {/* Header */}
-                    <div className="w-full h-[70px] border-b border-gray-200 bg-white flex items-center justify-center relative shrink-0">
-                        <div className="flex items-center justify-center gap-1">
-                            <span className="text-3xl relative top-[2px]">🐝</span>
-                            <span className="font-bold text-[28px] text-gray-900 tracking-tight ml-1 font-sans">
-                                beemo<span className="text-sm align-top relative -top-[4px] ml-0.5 font-medium">™</span>
-                            </span>
-                        </div>
-                        <button
-                            onClick={() => setShowCheckoutModal(false)}
-                            className="absolute right-6 p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500 hover:text-gray-900"
-                        >
-                            <X size={24} />
-                        </button>
-                    </div>
-
-                    {/* Content Area - Scrolling */}
-                    <div className="w-full flex-1 overflow-y-auto bg-[#fafafa] flex justify-center py-10">
-                        <div className="w-full max-w-[1100px] px-6 flex gap-8">
-                            {/* Left Column: Billing Details */}
-                            <div className="flex-[0_0_65%] bg-white rounded-md shadow-sm border border-gray-200 p-8 self-start">
-                                <h2 className="text-2xl font-bold text-gray-800 mb-6 font-sans">Datos de facturación</h2>
-                                <div className="border-t border-gray-200 mb-6"></div>
-
-                                <div className="flex justify-between items-center mb-6">
-                                    <h3 className="font-bold text-gray-800 text-sm">Pago con Tarjeta de Crédito</h3>
-                                    <div className="flex gap-2">
-                                        <div className="h-6 w-10 bg-[#1434CB] rounded text-white text-[10px] font-bold flex items-center justify-center">VISA</div>
-                                        <div className="h-6 w-10 bg-[#EB001B] rounded flex items-center justify-center relative overflow-hidden"><div className="w-6 h-6 rounded-full bg-[#F79E1B] absolute right-[-5px] opacity-80"></div></div>
-                                        <div className="h-6 w-10 bg-[#2874C2] rounded text-white text-[8px] font-bold flex flex-col items-center justify-center leading-none"><span>AM</span><span>EX</span></div>
-                                        <div className="h-6 w-10 border border-gray-300 rounded bg-white text-orange-500 text-[8px] font-bold flex items-center justify-center">DISCOVER</div>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4 mb-4">
-                                    <div>
-                                        <label className="block text-[13px] text-gray-600 mb-1">País <span className="text-red-500">*</span></label>
-                                        <select className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none bg-white">
-                                            <option>Selecciona uno</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[13px] text-gray-600 mb-1">Correo Electrónico <span className="text-red-500">*</span></label>
-                                        <div className="relative">
-                                            <input type="email" value={data.email} readOnly className="w-full border border-gray-300 rounded pl-9 pr-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
-                                            <Mail className="absolute left-3 top-3 text-gray-400" size={16} />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[13px] text-gray-600 mb-1">Nombre del Tarjetahabiente <span className="text-red-500">*</span></label>
-                                        <input type="text" defaultValue={`${data.firstName} ${data.lastName}`.trim()} className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[13px] text-gray-600 mb-1">Número de Tarjeta <span className="text-red-500">*</span></label>
-                                        <div className="relative">
-                                            <input type="text" className="w-full border border-gray-300 rounded pl-9 pr-3 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
-                                            <CreditCard className="absolute left-3 top-3 text-gray-400" size={16} />
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <div className="flex-1">
-                                            <label className="block text-[13px] text-gray-600 mb-1">Fecha de Caducidad</label>
-                                            <select className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm focus:border-blue-500 outline-none">
-                                                <option>Mes</option>
-                                            </select>
-                                        </div>
-                                        <div className="flex-1">
-                                            <label className="block text-[13px] text-gray-600 mb-1">&nbsp;</label>
-                                            <select className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm focus:border-blue-500 outline-none">
-                                                <option>Año</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[13px] text-gray-600 mb-1">Código de Seguridad <span className="text-red-500">*</span></label>
-                                        <div className="flex items-center gap-2">
-                                            <div className="relative flex-1">
-                                                <input type="text" className="w-full border border-gray-300 rounded pl-9 pr-3 py-2.5 text-sm focus:border-blue-500 outline-none" placeholder="CVV" />
-                                                <Lock className="absolute left-3 top-3 text-gray-400" size={16} />
-                                            </div>
-                                            <div className="w-10 h-6 bg-gray-200 rounded flex items-center justify-center text-[8px] font-bold text-gray-600 border border-gray-300 shrink-0">CVV</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <button className="w-full bg-[#1b44c8] hover:bg-blue-800 text-white font-bold py-3 mt-4 rounded transition-colors text-sm shadow-sm">
-                                    Realizar Pago
-                                </button>
-
-                                <div className="mt-8">
-                                    <h4 className="font-bold text-gray-800 mb-4 text-sm">También puedes pagar usando:</h4>
-                                    <button className="w-full bg-black hover:bg-gray-800 text-white font-medium py-3 rounded flex items-center justify-center gap-2 transition-colors">
-                                        <span className="text-xl font-bold">G</span> Pay
-                                    </button>
-                                </div>
-
-                                <div className="mt-8 pt-6 border-t border-gray-100">
-                                    <p className="text-[11px] text-gray-500 text-justify leading-relaxed">
-                                        Al finalizar el pago, confirmas que estás de acuerdo con que smartBeemo realice cargos automáticos a tu método de pago registrado para renovar tu suscripción de acuerdo con el plan seleccionado, ya sea mensual, semestral o anual. Detalles del acuerdo: Renovación Automática: Tu suscripción a smartBeemo se renovará automáticamente al final del período de suscripción actual, sin necesidad de acción adicional por tu parte. smartBeemo te notificará con anticipación antes de realizar cualquier cargo relacionado con la renovación de tu suscripción. smartBeemo se compromete a proteger la seguridad de tu información financiera. No almacenamos detalles completos de tarjetas de crédito o débito en nuestros servidores.
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Right Column: Order Summary */}
-                            <div className="flex-[0_0_35%]  self-start">
-                                <h2 className="text-xl font-bold text-gray-800 mb-4 font-sans">Resumen del pedido</h2>
-                                <div className="border-t border-gray-200 mb-4"></div>
-
-                                <div className="space-y-4 mb-6">
-                                    <div className="flex justify-between items-start">
-                                        <div className="text-[13px] text-gray-700">Beemo Pro - 12 meses<br />Pago Inicial:</div>
-                                        <div className="font-bold text-[13px] text-gray-800">COP $159.900</div>
-                                    </div>
-                                    <div className="flex justify-between items-start">
-                                        <div className="text-[13px] text-gray-700">Cuotas Pendientes:<br />Valor: 11 x</div>
-                                        <div className="font-bold text-[13px] text-gray-800">COP $130.827,27</div>
-                                    </div>
-                                    <div className="text-[13px] text-gray-700 pt-2">
-                                        Bono: Accede 12 meses a Beemo PRO
-                                    </div>
-                                </div>
-
-                                <div className="border-t border-gray-200 my-4"></div>
-                                <div className="flex justify-between items-center mb-6">
-                                    <div className="font-bold text-sm text-gray-800">Total a pagar ahora:</div>
-                                    <div className="font-bold text-sm text-gray-800">COP $159.900</div>
-                                </div>
-
-                                <div className="bg-[#f8f9fa] rounded p-4 text-[13px] text-gray-700 space-y-2 mb-8">
-                                    <div className="flex justify-between"><span>Periodo inicial:</span><span className="font-bold">12 meses</span></div>
-                                    <div className="flex justify-between"><span>Tipo de pago:</span><span className="font-bold">Cuotas</span></div>
-                                    <div className="flex justify-between"><span>Próximo cobro cuota:</span><span className="font-bold">22 marzo, 2026</span></div>
-                                </div>
-
-                                {/* Trust Badges */}
-                                <div className="space-y-5">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 bg-[#e8f5e9] rounded-full border-2 border-green-700 flex items-center justify-center shrink-0">
-                                            <Lock size={16} className="text-green-800" fill="currentColor" />
-                                        </div>
-                                        <div className="font-bold text-[13px] text-gray-800 leading-tight">Su información es<br />100% segura</div>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 bg-[#e8f5e9] rounded-full border-2 border-green-700 flex items-center justify-center shrink-0">
-                                            <span className="text-base">👍</span>
-                                        </div>
-                                        <div className="font-bold text-[13px] text-gray-800 leading-tight">Ambiente seguro<br />y autenticado</div>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 bg-[#e8f5e9] rounded-full border-2 border-green-700 flex items-center justify-center shrink-0 relative">
-                                            <span className="text-lg relative -top-0.5">🎖️</span>
-                                        </div>
-                                        <div className="font-bold text-[13px] text-gray-800 leading-tight">Contenido 100%<br />revisado y aprobado</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <CheckoutModal
+                isOpen={showCheckoutModal}
+                onClose={() => setShowCheckoutModal(false)}
+                data={data}
+                checkoutData={activeCheckoutData ? {
+                    productName: activeCheckoutData.productName,
+                    initialFee: activeCheckoutData.initialFee,
+                    quotaValue: activeCheckoutData.quotaValue,
+                    quotasCount: activeCheckoutData.quotasCount,
+                    currency: activeCheckoutData.currency,
+                    nextQuotaDate: activeCheckoutData.nextQuotaDate
+                } : null}
+            />
         </div>
     );
 };
