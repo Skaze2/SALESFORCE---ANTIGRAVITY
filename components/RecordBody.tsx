@@ -974,9 +974,14 @@ const ActivitySidebar: React.FC<{
     const [errorMessage, setErrorMessage] = useState("");
     const [generatedLink, setGeneratedLink] = useState("");
     const [subject, setSubject] = useState("Agenda");
-    const [dueDate, setDueDate] = useState("2/02/2026");
+    const getTodayFormatted = () => {
+        const d = new Date();
+        return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+    };
+
+    const [dueDate, setDueDate] = useState(getTodayFormatted());
     const [reminderSet, setReminderSet] = useState(true);
-    const [reminderDate, setReminderDate] = useState("2/02/2026");
+    const [reminderDate, setReminderDate] = useState(getTodayFormatted());
     const [reminderTime, setReminderTime] = useState("");
     const [showSubjectDropdown, setShowSubjectDropdown] = useState(false);
     const [showDueDateCalendar, setShowDueDateCalendar] = useState(false);
@@ -1679,3 +1684,4 @@ export const RecordBody: React.FC<{
             )}
         </div>
     );
+};
