@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronRight, Settings, ChevronDown, Check, Pencil, Info, Phone, LayoutList, FileText, Monitor, Store, Music, Cpu, Building, Wrench, CreditCard, Send, Smartphone, Crown, FileCheck, PenTool, Briefcase, Trophy, Heart, List, Bell, StickyNote, File, Landmark, Building2, Plus, GripVertical, Cloud, Search, Calendar, Clock, User, X, ChevronLeft, Ticket, AlertCircle, AlertTriangle, Image as ImageIcon, History } from 'lucide-react';
+import { ChevronRight, Settings, ChevronDown, Check, Pencil, Info, Phone, LayoutList, FileText, Monitor, Store, Music, Cpu, Building, Wrench, CreditCard, Send, Smartphone, Crown, FileCheck, PenTool, Briefcase, Trophy, Heart, List, Bell, StickyNote, File, Landmark, Building2, Plus, GripVertical, Cloud, Search, Calendar, Clock, User, X, ChevronLeft, Ticket, AlertCircle, AlertTriangle, Image as ImageIcon, History, RefreshCw, ArrowUp } from 'lucide-react';
 import { NewNoteModal } from './NewNoteModal';
 import { ProspectData, User as UserType } from '../App';
 import { db } from '../firebaseConfig';
@@ -234,8 +234,36 @@ const CustomCalendar = ({ onSelect, onClose, initialDate }: { onSelect: (date: s
 };
 
 // --- QuickLinks Component ---
-const QuickLinks = () => {
+const QuickLinks: React.FC<{ prospectId: string; }> = ({ prospectId }) => {
     const [isExpanded, setIsExpanded] = useState(false);
+    const [opportunities, setOpportunities] = useState<any[]>([]);
+    const [showSubMenu, setShowSubMenu] = useState<{ [key: string]: boolean }>({});
+
+    useEffect(() => {
+        if (!prospectId) return;
+        const ref = db.ref(`opportunities/${prospectId}`);
+        const handler = ref.orderByChild('createdAt').on('value', (snap: any) => {
+            const val = snap.val();
+            if (!val) { setOpportunities([]); return; }
+            const list = Object.values(val) as any[];
+            // Sort newest first
+            list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            setOpportunities(list);
+        });
+        return () => ref.off('value', handler);
+    }, [prospectId]);
+
+    const handleMouseEnter = (label: string) => {
+        if (label.includes('Oportunidades')) {
+            setShowSubMenu(prev => ({ ...prev, [label]: true }));
+        }
+    };
+
+    const handleMouseLeave = (label: string) => {
+        if (label.includes('Oportunidades')) {
+            setShowSubMenu(prev => ({ ...prev, [label]: false }));
+        }
+    };
 
     const items = [
         { icon: FileText, color: '#e5c15d', label: 'Userpilot Form Account...' },
@@ -248,8 +276,7 @@ const QuickLinks = () => {
         { icon: CreditCard, color: '#7986cb', label: 'Payments (0)' },
         { icon: Send, color: '#4dd0e1', label: 'Órdenes Portal (0)' },
         { icon: Smartphone, color: '#9ccc65', label: 'Prospect Interactions (0)' },
-        { icon: FileText, color: '#607d8b', label: 'Quotes (0)' },
-        { icon: Crown, color: '#ffb74d', label: 'Oportunidades (10+)' },
+        { icon: Crown, color: '#ffb74d', label: `Oportunidades (${opportunities.length > 10 ? '10+' : opportunities.length})` },
         { icon: FileCheck, color: '#4dbd74', label: 'Contratos (0)' },
         { icon: PenTool, color: '#f0898d', label: 'Facturas (0)' },
         { icon: Briefcase, color: '#f48fb1', label: 'Casos (0)' },
@@ -272,32 +299,99 @@ const QuickLinks = () => {
             borderBottom: '1px solid #dddbda',
             padding: '5px 16px',
             fontFamily: 'Salesforce Sans, Arial, sans-serif',
+            position: 'relative', // Contexto para el modal Oportunidades
         }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', alignItems: 'center' }}>
                 {visibleItems.map((item, index) => (
-                    <a
-                        key={index}
-                        href="#"
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: '4px',
-                            color: '#0070d2', textDecoration: 'none',
-                            fontSize: '12px', whiteSpace: 'nowrap',
-                            padding: '2px 0',
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
-                        onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
-                    >
-                        <span style={{
-                            width: '16px', height: '16px',
-                            background: item.color,
-                            borderRadius: '2px',
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                            flexShrink: 0,
-                        }}>
-                            <item.icon size={9} color="white" strokeWidth={2.5} />
-                        </span>
-                        <span>{item.label}</span>
-                    </a>
+                    <div key={index} onMouseEnter={() => handleMouseEnter(item.label)} onMouseLeave={() => handleMouseLeave(item.label)}>
+                        <a
+                            href="#"
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: '4px',
+                                color: '#0070d2', textDecoration: 'none',
+                                fontSize: '12px', whiteSpace: 'nowrap',
+                                padding: '2px 0',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
+                            onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
+                        >
+                            <span style={{
+                                width: '16px', height: '16px',
+                                background: item.color,
+                                borderRadius: '2px',
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                flexShrink: 0,
+                            }}>
+                                <item.icon size={9} color="white" strokeWidth={2.5} />
+                            </span>
+                            <span>{item.label}</span>
+                        </a>
+
+                        {/* Oportunidades Popover (Full Width aligned to container) */}
+                        {showSubMenu[item.label] && item.label.includes('Oportunidades') && (
+                            <div className="absolute top-full left-[0px] right-[0px] mt-[1px] bg-white border border-gray-300 shadow-xl rounded-b-md z-[9999] overflow-hidden">
+                                <div className="p-3 bg-[#f3f3f3] border-b border-gray-200 flex justify-between items-center">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 bg-[#ffb74d] rounded flex items-center justify-center shadow-sm">
+                                            <Crown size={18} className="text-white" />
+                                        </div>
+                                        <div>
+                                            <span className="font-bold text-base text-gray-900 block">Oportunidades</span>
+                                            <span className="text-xs text-gray-600 font-medium">{opportunities.length}+ elementos • Ordenado por Fecha de creación • Se actualizó hace unos segundos</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <button className="p-1.5 border border-gray-300 rounded bg-white hover:bg-gray-50 text-gray-600 shadow-sm"><Settings size={14} /></button>
+                                        <button className="p-1.5 border border-gray-300 rounded bg-white hover:bg-gray-50 text-gray-600 shadow-sm"><RefreshCw size={14} /></button>
+                                    </div>
+                                </div>
+                                <div className="max-h-[300px] overflow-auto">
+                                    <table className="w-full text-left border-collapse whitespace-nowrap">
+                                        <thead className="bg-[#f3f3f3] sticky top-0 z-10 shadow-sm">
+                                            <tr>
+                                                <th className="p-2 border-b border-t border-gray-200 text-xs font-bold text-gray-600 w-8 text-center"></th>
+                                                <th className="p-2 border-b border-t border-gray-200 text-xs font-bold text-gray-600">Nombre de la oportunidad</th>
+                                                <th className="p-2 border-b border-t border-gray-200 text-xs font-bold text-gray-600">Tipo Venta</th>
+                                                <th className="p-2 border-b border-t border-gray-200 text-xs font-bold text-gray-600">Tipo</th>
+                                                <th className="p-2 border-b border-t border-gray-200 text-xs font-bold text-gray-600 text-right">Monto final mon...</th>
+                                                <th className="p-2 border-b border-t border-gray-200 text-xs font-bold text-gray-600">Moneda L...</th>
+                                                <th className="p-2 border-b border-t border-gray-200 text-xs font-bold text-gray-600">Etapa</th>
+                                                <th className="p-2 border-b border-t border-gray-200 text-xs font-bold text-gray-600">Nombre completo del...</th>
+                                                <th className="p-2 border-b border-t border-gray-200 text-xs font-bold text-gray-600 flex items-center gap-1">Fecha de creación <ArrowUp size={10} className="text-blue-500" /></th>
+                                                <th className="p-2 border-b border-t border-gray-200 text-xs font-bold text-gray-600">Fecha de cierre</th>
+                                                <th className="p-2 border-b border-t border-gray-200 text-xs font-bold text-gray-600">Numero Suscripción</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {opportunities.length === 0 ? (
+                                                <tr><td colSpan={11} className="p-4 text-center text-sm text-gray-500">No hay oportunidades.</td></tr>
+                                            ) : opportunities.map((opp, idx) => (
+                                                <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50 bg-white">
+                                                    <td className="p-2 text-xs text-gray-500 text-center">{idx + 1}</td>
+                                                    <td className="p-2 text-xs text-blue-600 hover:underline cursor-pointer font-medium"><a href="#">{opp.name}</a></td>
+                                                    <td className="p-2 text-xs text-gray-800">{opp.saleType}</td>
+                                                    <td className="p-2 text-xs text-gray-800">{opp.type}</td>
+                                                    <td className="p-2 text-xs text-gray-800 text-right font-medium">{opp.formattedAmount}</td>
+                                                    <td className="p-2 text-xs text-gray-800">{opp.currency}</td>
+                                                    <td className="p-2 text-xs text-gray-800">{opp.stage}</td>
+                                                    <td className="p-2 text-xs text-blue-600 hover:underline cursor-pointer"><a href="#">{opp.owner}</a></td>
+                                                    <td className="p-2 text-xs text-gray-800">{opp.createdDisplay}</td>
+                                                    <td className="p-2 text-xs text-gray-800">{opp.closeDate}</td>
+                                                    <td className="p-2 text-xs text-gray-800">{opp.subNumber}</td>
+                                                    <td className="p-2 text-xs text-gray-400 text-center"><button className="border border-gray-300 rounded hover:bg-gray-100 p-0.5"><ChevronDown size={12} /></button></td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {opportunities.length > 0 && (
+                                    <div className="p-2 text-center border-t border-gray-200 bg-white">
+                                        <a href="#" className="text-sm text-blue-600 hover:underline">Ver todos</a>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 ))}
 
                 {!isExpanded && (
@@ -812,8 +906,10 @@ const ActivitySidebar: React.FC<{
     currentUser: UserType;
     daysCreation: number;
     country: string;
+    owner?: string;
+    prospectName?: string;
     onTaskCreated: (subject: string) => void;
-}> = ({ currentStepName, prospectId, currentUser, daysCreation, country, onTaskCreated }) => {
+}> = ({ currentStepName, prospectId, currentUser, daysCreation, country, owner, prospectName, onTaskCreated }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [saving, setSaving] = useState(false);
     const [wizardStep, setWizardStep] = useState(0);
@@ -853,7 +949,9 @@ const ActivitySidebar: React.FC<{
     const [showReminderDateCalendar, setShowReminderDateCalendar] = useState(false);
     const [showTimeDropdown, setShowTimeDropdown] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
-    const showPromoButton = ['En llamada', 'Agendado', 'Asignado'].includes(currentStepName);
+    const userFullName = `${currentUser.firstName} ${currentUser.lastName}`.trim();
+    const isOwner = owner === userFullName;
+    const showPromoButton = ['En llamada', 'Agendado', 'Asignado'].includes(currentStepName) && isOwner;
 
     useEffect(() => { setReminderTime(getBogotaTime()); }, []);
 
@@ -897,6 +995,50 @@ const ActivitySidebar: React.FC<{
         if (wizardStep === 5) {
             const randomId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
             setGeneratedLink(`https://smartbeemo.com/checkout/?subscriptionid=${randomId}`);
+
+            // Create the Opportunity Record in Firebase
+            if (selectedProduct && selectedOffer) {
+                const now = new Date();
+                const mm = String(now.getMonth() + 1).padStart(2, '0');
+                const dd = String(now.getDate()).padStart(2, '0');
+                const yyyy = now.getFullYear();
+
+                // Format times for name: HH:MM:SS
+                const hh = String(now.getHours()).padStart(2, '0');
+                const min = String(now.getMinutes()).padStart(2, '0');
+                const ss = String(now.getSeconds()).padStart(2, '0');
+                const exactTime = `${hh}:${min}:${ss}`;
+
+                // Format times for display column: 10:26 a. m.
+                const hours12 = now.getHours() % 12 || 12;
+                const amPm = now.getHours() >= 12 ? 'p. m.' : 'a. m.';
+                const createdDisplay = `${dd}/${mm}/${yyyy}, ${hours12}:${min} ${amPm}`;
+                const closeDateDisplay = `${dd}/${mm}/${yyyy}`;
+
+                const oppName = `Opp Adquisiciones ${prospectName || 'Cliente'} ${yyyy}-${mm}-${dd} ${exactTime}`;
+
+                const formattedAmt = new Intl.NumberFormat(offerLocale, {
+                    minimumFractionDigits: 2, maximumFractionDigits: 2
+                }).format(selectedOffer.total); // Only formatting digits without currency symbol for the table digit column
+
+                const opportunity = {
+                    name: oppName,
+                    saleType: "Adquisicion",
+                    type: "Bootcamp", // Based on requirements
+                    formattedAmount: formattedAmt,
+                    currency: offerCurrency,
+                    stage: "Pendiente de pago",
+                    owner: owner || "Administración Salesforce",
+                    createdDisplay: createdDisplay,
+                    closeDate: closeDateDisplay,
+                    subNumber: `A-S00${Math.floor(Math.random() * 900000) + 100000}`,
+                    createdAt: now.toISOString()
+                };
+
+                db.ref(`opportunities/${prospectId}`).push(opportunity).catch(err => {
+                    console.error("Error creating opportunity:", err);
+                });
+            }
         }
         setWizardStep(prev => prev + 1);
     }
@@ -1221,7 +1363,7 @@ export const RecordBody: React.FC<{
             {showErrorToast && <ErrorToast message={errorMessage} onClose={() => setShowErrorToast(false)} />}
 
             <div style={{ marginBottom: '4px', marginLeft: '8px', marginRight: '8px' }}>
-                <QuickLinks />
+                <QuickLinks prospectId={data.id} />
             </div>
 
             <div style={{ marginBottom: '4px', marginLeft: '8px', marginRight: '8px' }}>
@@ -1245,11 +1387,14 @@ export const RecordBody: React.FC<{
                 <div className="flex-[0_0_45%] bg-[#f3f3f3] border-l border-gray-200 flex flex-col">
                     <div className="overflow-y-auto flex-1 p-3">
                         <ActivitySidebar
+                            key={`${data.id}-${data.owner}`}
                             currentStepName={STEPS[currentStep]}
                             prospectId={data.id}
                             currentUser={currentUser}
                             daysCreation={data.daysCreation}
                             country={data.country}
+                            owner={data.owner}
+                            prospectName={`${data.firstName} ${data.lastName}`.trim()}
                             onTaskCreated={(subject) => {
                                 setSuccessMessage(`Se creó la tarea "${subject}"`);
                                 setShowSuccessToast(true);

@@ -1189,7 +1189,7 @@ const App = () => {
         setTabs(prev => {
             const existing = prev.find(t => t.id === record.id);
             if (!existing) {
-                return [...prev, record];
+                return [record, ...prev];
             }
             return prev;
         });
@@ -1248,7 +1248,7 @@ const App = () => {
             email: '', country: '', phoneCode: '', phone: '', program: '', daysCreation: 0, createdAt: new Date().toISOString(),
             type: 'new-case'
         };
-        setTabs([...tabs, newTab]);
+        setTabs([newTab, ...tabs]);
         setActiveTabId(newTab.id);
         setCurrentView('record'); // Wizard is rendered in 'record' slot if type is new-case
     };

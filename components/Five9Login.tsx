@@ -150,6 +150,12 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
     }, [view, status]);
 
     const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const formatStateTime = (seconds: number) => {
         const hrs = Math.floor(seconds / 3600);
         const mins = Math.floor((seconds % 3600) / 60);
         const secs = seconds % 60;
@@ -397,7 +403,7 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
 
     useEffect(() => {
         let interval: NodeJS.Timeout;
-        if (view === 'active_call') {
+        if (view === 'active_call' || view === 'disposition') {
             if (callStatus === 'Connected' || callStatus === 'Dialing') {
                 interval = setInterval(() => {
                     setCallDuration(prev => prev + 1);
@@ -748,7 +754,7 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                                     <span className="truncate max-w-[100px] text-left">{status}</span>
                                 </div>
                                 <div className="flex items-center gap-1">
-                                    <span>{formatTime(elapsedTime)}</span>
+                                    <span>{formatStateTime(elapsedTime)}</span>
                                     <ChevronDown size={14} />
                                 </div>
                             </button>
@@ -1598,7 +1604,7 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                             </span>
                             <span className={`flex items-center gap-1 ${callStatus === 'Wrap Up' ? 'text-[#c23934]' : ''}`}>
                                 <Clock size={12} />
-                                <span>{callStatus === 'Wrap Up' ? '-' : ''}{formatTime(callDuration)}</span>
+                                <span>{callStatus === 'Wrap Up' ? '-' : ''}{formatTime(Math.abs(callDuration))}</span>
                             </span>
                         </div>
                         <div className="text-[#16325c] text-xl font-normal">
@@ -1627,9 +1633,8 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                         <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-2">
                             {callDirection === 'manual' ? (
                                 manualDispositions.filter(d => d.toLowerCase().includes(dispositionSearch.toLowerCase())).map(d => (
-                                    <label key={d} className="flex items-center gap-2 cursor-pointer group">
+                                    <label key={d} className="flex items-center gap-2 cursor-pointer group" onClick={() => setSelectedDisposition(d)}>
                                         <div
-                                            onClick={() => setSelectedDisposition(d)}
                                             className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedDisposition === d ? 'border-[#0070d2] bg-[#0070d2]' : 'border-gray-400 group-hover:border-[#0070d2]'}`}
                                         >
                                             <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
@@ -1643,9 +1648,8 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                                     if (node.type === 'option') {
                                         if (dispositionSearch && !node.label.toLowerCase().includes(dispositionSearch.toLowerCase())) return null;
                                         return (
-                                            <label key={node.id} className="flex items-center gap-2 cursor-pointer group">
+                                            <label key={node.id} className="flex items-center gap-2 cursor-pointer group" onClick={() => setSelectedDisposition(node.label)}>
                                                 <div
-                                                    onClick={() => setSelectedDisposition(node.label)}
                                                     className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedDisposition === node.label ? 'border-[#0070d2] bg-[#0070d2]' : 'border-gray-400 group-hover:border-[#0070d2]'}`}
                                                 >
                                                     <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
@@ -1676,9 +1680,8 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                                                 {isExpanded && (
                                                     <div className="pl-6 flex flex-col gap-2 mt-1 border-l border-dotted border-gray-300 ml-1.5">
                                                         {childrenToRender.map((child: any) => (
-                                                            <label key={child.id} className="flex items-center gap-2 cursor-pointer group">
+                                                            <label key={child.id} className="flex items-center gap-2 cursor-pointer group" onClick={() => setSelectedDisposition(child.label)}>
                                                                 <div
-                                                                    onClick={() => setSelectedDisposition(child.label)}
                                                                     className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedDisposition === child.label ? 'border-[#0070d2] bg-[#0070d2]' : 'border-gray-400 group-hover:border-[#0070d2]'}`}
                                                                 >
                                                                     <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
@@ -1705,9 +1708,8 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                             <button className="flex-1 py-1.5 text-[#54698d] text-sm font-medium bg-[#f4f6f9] hover:bg-gray-50 text-center border-b border-gray-200">Frequent</button>
                         </div>
                         <div className="flex flex-col gap-2">
-                            <label className="flex items-center gap-2 cursor-pointer group">
+                            <label className="flex items-center gap-2 cursor-pointer group" onClick={() => setSelectedDisposition('Llamada Manual')}>
                                 <div
-                                    onClick={() => setSelectedDisposition('Llamada Manual')}
                                     className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedDisposition === 'Llamada Manual' ? 'border-[#0070d2] bg-[#0070d2]' : 'border-gray-400 group-hover:border-[#0070d2]'}`}
                                 >
                                     <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
