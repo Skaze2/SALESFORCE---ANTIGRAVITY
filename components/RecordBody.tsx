@@ -1476,11 +1476,20 @@ export const RecordBody: React.FC<{
             }
 
             // 1. Persist to Firebase so all agents see the change and it survives logout
-            await db.ref(`prospects/${data.id}`).update({
+            let payload: any = {
                 status: newStatus,
                 owner: newOwner,
                 statusUpdatedAt: now.toISOString()
-            });
+            };
+
+            // If this is a simulated call, we must ensure the full record is saved to Firebase
+            // to avoid creating "ghost clients" that only have a status and owner.
+            if (data.id.includes('-sim-')) {
+                payload = { ...data, ...payload };
+                delete payload.id;
+            }
+
+            await db.ref(`prospects/${data.id}`).update(payload);
 
             // 2. Update local React state to reflect immediately without a re-fetch
             onUpdateRecord({

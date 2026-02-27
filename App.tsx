@@ -1125,10 +1125,8 @@ const App = () => {
             // Only subscribe to real prospect records (not wizard tabs)
             if (tab.type === 'new-case') return;
 
-            // Extract the real Firebase ID if it's a simulated duplicate
-            const realId = tab.id.split('-sim-')[0];
-
-            const prospectRef = db.ref(`prospects/${realId}`);
+            // Listen to the specific record (whether it's real or simulated)
+            const prospectRef = db.ref(`prospects/${tab.id}`);
             const listener = prospectRef.on('value', (snapshot: any) => {
                 const val = snapshot.val();
                 if (!val) return;
