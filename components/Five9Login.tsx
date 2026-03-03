@@ -1545,29 +1545,29 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
             { id: 'dnc', label: 'Do Not Call', type: 'option' },
             { id: 'recycle', label: 'Recycle', type: 'option' },
             {
-                id: 'sin_gestion', label: 'SIN GESTION', type: 'category', children: [
-                    { id: 'buzon', label: 'Buzon de Voz', type: 'option' },
+                id: 'sin_contacto_efectivo', label: '1. Sin Contacto Efectivo', type: 'category', children: [
+                    { id: 'buzon_voz', label: 'Buzón de voz', type: 'option' },
                     { id: 'contesta_otra', label: 'Contesta otra persona', type: 'option' },
-                    { id: 'llamada_muda', label: 'Llamada Muda', type: 'option' },
-                    { id: 'mala_comunicacion', label: 'Mala Comunicacion', type: 'option' },
-                    { id: 'lead_no_disponible', label: 'Lead no disponible', type: 'option' }
+                    { id: 'numero_equivocado', label: 'Número equivocado', type: 'option' },
+                    { id: 'mala_comunicacion', label: 'Mala comunicación', type: 'option' }
                 ]
             },
             {
-                id: 'gestionado', label: 'GESTIONADO', type: 'category', children: [
-                    { id: 'agendado', label: 'Agendado', type: 'option' },
-                    { id: 'asignados', label: 'Asignados', type: 'option' },
-                    { id: 'informado', label: 'Informado', type: 'option' }
+                id: 'contacto_sin_interes', label: '2. Contacto Establecido – Sin Interés', type: 'category', children: [
+                    { id: 'no_interesado', label: 'No Interesado', type: 'option' },
+                    { id: 'no_llamar_jamas', label: 'No llamar jamas', type: 'option' }
                 ]
             },
             {
-                id: 'no_calificado', label: 'NO CALIFICADO', type: 'category', children: [
-                    { id: 'estudiante_fuera_perfil', label: 'Estudiante Fuera de Perfil', type: 'option' },
+                id: 'en_evaluacion', label: '3. En evaluación', type: 'category', children: [
+                    { id: 'llamar_despues', label: 'Llamar después (fecha / hora específica)', type: 'option' }
                 ]
             },
             {
-                id: 'venta_cerrada', label: 'VENTA CERRADA', type: 'category', children: [
-                    { id: 'matricula_exitosa', label: 'Matricula Exitosa', type: 'option' },
+                id: 'resultado_positivo', label: '4. Resultado Positivo', type: 'category', children: [
+                    { id: 'venta', label: 'Venta', type: 'option' },
+                    { id: 'asignado_compromiso', label: 'Asignado - Compromiso de Pago', type: 'option' },
+                    { id: 'estudiante_activo', label: 'Estudiante Activo', type: 'option' }
                 ]
             }
         ];
