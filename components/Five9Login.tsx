@@ -33,6 +33,9 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
     const [callDuration, setCallDuration] = useState(0);
     const [callStatus, setCallStatus] = useState('');
     const ringtoneRef = useRef<any>(null);
+    // Refs to restore auxiliar status after call ends (avoid forcing Ready)
+    const statusRef = useRef<string>('Not Ready');
+    const statusBeforeCallRef = useRef<string | null>(null);
 
     // Country Selector State
     const [selectedCountry, setSelectedCountry] = useState(COUNTRIES.find(c => c.code === '+1') || COUNTRIES[0]);
@@ -66,7 +69,6 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
 
     // Call Context State
     const [callDirection, setCallDirection] = useState<'manual' | 'simulated' | null>(null);
-    const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
 
     // Audio Devices State
     const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
@@ -83,11 +85,16 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
         return () => clearInterval(interval);
     }, []);
 
+    useEffect(() => {
+        statusRef.current = status;
+    }, [status]);
+
     // ── Listen for click-to-dial events dispatched by RecordBody ──
     useEffect(() => {
         const handleDialEvent = (e: Event) => {
             const { number } = (e as CustomEvent).detail as { number: string };
             if (!number) return;
+            statusBeforeCallRef.current = statusRef.current;
             setPhoneNumber(number);
             setView('new_call');
             // Small delay so the new_call view renders, then auto-dial
@@ -112,6 +119,7 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
             // that App.tsx could listen to if it controls visibility. Or we rely on the 
             // user having it open. For now, we just ensure the view forces open inside Five9.
 
+            statusBeforeCallRef.current = statusRef.current;
             // 2. Setup the active call
             setActiveCall({
                 name: detail.name,
@@ -413,11 +421,12 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                     setCallDuration(prev => {
                         if (prev <= 0) {
                             clearInterval(interval);
-                            // Auto-transition
+                            const restored = statusBeforeCallRef.current || 'Forzado';
                             setView('console');
-                            setStatus('Forzado');
-                            // Removed setElapsedTime(0) to allow accumulated time 
-                            // to persist if transitioning to forced wrap up.
+                            setStatus(restored);
+                            localStorage.setItem('five9_status', restored);
+                            window.dispatchEvent(new Event('five9_status_changed'));
+                            statusBeforeCallRef.current = null;
                             return 0;
                         }
                         return prev - 1;
@@ -785,6 +794,7 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                     <div className="w-[40%] p-2 border-r border-gray-200 flex flex-col gap-2">
                         <button
                             onClick={() => {
+                                statusBeforeCallRef.current = statusRef.current;
                                 setView('new_call');
                                 setPhoneNumber('');
                             }}
@@ -1498,13 +1508,11 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                                     setActiveCall(null);
                                     setCallStatus('');
 
-                                    // Make Complete Transfer behave like End Interaction
-                                    // Go back to ready status automatically to trigger the next simulation
-                                    // and accumulate the time spent on the transfer/call.
-                                    const readyStatus = 'Ready (Voice, Voicemail)';
-                                    setStatus(readyStatus);
-                                    localStorage.setItem('five9_status', readyStatus);
+                                    const restored = statusBeforeCallRef.current || 'Ready (Voice, Voicemail)';
+                                    setStatus(restored);
+                                    localStorage.setItem('five9_status', restored);
                                     window.dispatchEvent(new Event('five9_status_changed'));
+                                    statusBeforeCallRef.current = null;
                                 }}
                                 className="w-full py-2 bg-[#0070d2] text-white rounded text-sm font-medium hover:bg-[#005fb2] transition-colors mt-1"
                             >
@@ -1540,44 +1548,14 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
 
     if (view === 'disposition') {
         const manualDispositions = ['Do Not Call', 'Llamada Manual'];
-        // Simulated Disposition Tree Structure based on user screenshots
-        const simulatedDispositions = [
-            { id: 'dnc', label: 'Do Not Call', type: 'option' },
-            { id: 'recycle', label: 'Recycle', type: 'option' },
-            {
-                id: 'sin_contacto_efectivo', label: '1. Sin Contacto Efectivo', type: 'category', children: [
-                    { id: 'buzon_voz', label: 'Buzón de voz', type: 'option' },
-                    { id: 'contesta_otra', label: 'Contesta otra persona', type: 'option' },
-                    { id: 'numero_equivocado', label: 'Número equivocado', type: 'option' },
-                    { id: 'mala_comunicacion', label: 'Mala comunicación', type: 'option' }
-                ]
-            },
-            {
-                id: 'contacto_sin_interes', label: '2. Contacto Establecido – Sin Interés', type: 'category', children: [
-                    { id: 'no_interesado', label: 'No Interesado', type: 'option' },
-                    { id: 'no_llamar_jamas', label: 'No llamar jamas', type: 'option' }
-                ]
-            },
-            {
-                id: 'en_evaluacion', label: '3. En evaluación', type: 'category', children: [
-                    { id: 'llamar_despues', label: 'Llamar después (fecha / hora específica)', type: 'option' }
-                ]
-            },
-            {
-                id: 'resultado_positivo', label: '4. Resultado Positivo', type: 'category', children: [
-                    { id: 'venta', label: 'Venta', type: 'option' },
-                    { id: 'asignado_compromiso', label: 'Asignado - Compromiso de Pago', type: 'option' },
-                    { id: 'estudiante_activo', label: 'Estudiante Activo', type: 'option' }
-                ]
-            }
+        const directDispositions = [
+            'Buzón de voz',
+            'Llamar mas tarde 4H',
+            'Llamar Dia Siguiente 24H',
+            'Llamar después 48H',
+            'No interesado',
+            'No llamar jamás'
         ];
-
-        const toggleCategory = (categoryId: string) => {
-            setExpandedCategories(prev => ({
-                ...prev,
-                [categoryId]: !prev[categoryId]
-            }));
-        };
         return (
             <div className="fixed bottom-[36px] left-0 w-[600px] h-auto bg-white shadow-2xl border border-gray-300 rounded-tr-lg z-[60] flex flex-col font-sans animate-in slide-in-from-bottom-2 duration-200">
                 {/* Header */}
@@ -1631,8 +1609,9 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                             onChange={(e) => setDispositionSearch(e.target.value)}
                         />
                         <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-2">
-                            {callDirection === 'manual' ? (
-                                manualDispositions.filter(d => d.toLowerCase().includes(dispositionSearch.toLowerCase())).map(d => (
+                            {(callDirection === 'manual' ? manualDispositions : directDispositions)
+                                .filter((d) => d.toLowerCase().includes(dispositionSearch.toLowerCase()))
+                                .map((d) => (
                                     <label key={d} className="flex items-center gap-2 cursor-pointer group" onClick={() => setSelectedDisposition(d)}>
                                         <div
                                             className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedDisposition === d ? 'border-[#0070d2] bg-[#0070d2]' : 'border-gray-400 group-hover:border-[#0070d2]'}`}
@@ -1641,62 +1620,7 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                                         </div>
                                         <span className={`text-sm ${selectedDisposition === d ? 'font-bold text-[#16325c]' : 'text-[#16325c]'}`}>{d}</span>
                                     </label>
-                                ))
-                            ) : (
-                                // Render Simulated Dispositions Tree
-                                simulatedDispositions.map((node: any) => {
-                                    if (node.type === 'option') {
-                                        if (dispositionSearch && !node.label.toLowerCase().includes(dispositionSearch.toLowerCase())) return null;
-                                        return (
-                                            <label key={node.id} className="flex items-center gap-2 cursor-pointer group" onClick={() => setSelectedDisposition(node.label)}>
-                                                <div
-                                                    className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedDisposition === node.label ? 'border-[#0070d2] bg-[#0070d2]' : 'border-gray-400 group-hover:border-[#0070d2]'}`}
-                                                >
-                                                    <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-                                                </div>
-                                                <span className={`text-sm ${selectedDisposition === node.label ? 'font-bold text-[#16325c]' : 'text-[#16325c]'}`}>{node.label}</span>
-                                            </label>
-                                        );
-                                    } else if (node.type === 'category') {
-                                        // If searching, check if any child matches
-                                        const searchLower = dispositionSearch.toLowerCase();
-                                        const matchingChildren = node.children.filter((child: any) => child.label.toLowerCase().includes(searchLower));
-
-                                        if (dispositionSearch && matchingChildren.length === 0 && !node.label.toLowerCase().includes(searchLower)) return null;
-
-                                        // Auto-expand if searching and there are matches inside
-                                        const isExpanded = dispositionSearch ? matchingChildren.length > 0 : expandedCategories[node.id];
-                                        const childrenToRender = dispositionSearch && !node.label.toLowerCase().includes(searchLower) ? matchingChildren : node.children;
-
-                                        return (
-                                            <div key={node.id} className="flex flex-col">
-                                                <div
-                                                    onClick={() => toggleCategory(node.id)}
-                                                    className="flex items-center gap-1 cursor-pointer hover:bg-gray-50 py-1"
-                                                >
-                                                    <ChevronDown size={14} className={`text-gray-500 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
-                                                    <span className="text-sm text-[#54698d] uppercase">{node.label}</span>
-                                                </div>
-                                                {isExpanded && (
-                                                    <div className="pl-6 flex flex-col gap-2 mt-1 border-l border-dotted border-gray-300 ml-1.5">
-                                                        {childrenToRender.map((child: any) => (
-                                                            <label key={child.id} className="flex items-center gap-2 cursor-pointer group" onClick={() => setSelectedDisposition(child.label)}>
-                                                                <div
-                                                                    className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedDisposition === child.label ? 'border-[#0070d2] bg-[#0070d2]' : 'border-gray-400 group-hover:border-[#0070d2]'}`}
-                                                                >
-                                                                    <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-                                                                </div>
-                                                                <span className={`text-sm ${selectedDisposition === child.label ? 'font-bold text-[#16325c]' : 'text-[#16325c]'}`}>{child.label}</span>
-                                                            </label>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    }
-                                    return null;
-                                })
-                            )}
+                                ))}
                         </div>
                     </div>
 
@@ -1707,15 +1631,10 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                             <button className="flex-1 py-1.5 text-[#0070d2] text-sm font-medium bg-white hover:bg-gray-50 text-center border-b-2 border-[#0070d2]">Recent</button>
                             <button className="flex-1 py-1.5 text-[#54698d] text-sm font-medium bg-[#f4f6f9] hover:bg-gray-50 text-center border-b border-gray-200">Frequent</button>
                         </div>
-                        <div className="flex flex-col gap-2">
-                            <label className="flex items-center gap-2 cursor-pointer group" onClick={() => setSelectedDisposition('Llamada Manual')}>
-                                <div
-                                    className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedDisposition === 'Llamada Manual' ? 'border-[#0070d2] bg-[#0070d2]' : 'border-gray-400 group-hover:border-[#0070d2]'}`}
-                                >
-                                    <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-                                </div>
-                                <span className={`text-sm ${selectedDisposition === 'Llamada Manual' ? 'font-bold text-[#16325c]' : 'text-[#16325c]'}`}>Llamada Manual</span>
-                            </label>
+                        <div className="text-xs text-[#54698d]">
+                            {callDirection === 'manual'
+                                ? 'Tipificaciones de llamada manual activas.'
+                                : 'Tipificaciones simplificadas activas.'}
                         </div>
                     </div>
                 </div>
@@ -1730,25 +1649,17 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                     </button>
                     <button
                         onClick={() => {
-                            // End Interaction
-                            stopRingtone(); // Force stop ringtone just in case
+                            stopRingtone();
                             setView('console');
                             setActiveCall(null);
                             setSelectedDisposition(null);
                             setDispositionSearch('');
 
-                            // Check if simulation is active globally using localStorage or rely on App.tsx logic? 
-                            // Always go back to ready on end interaction if it was a simulated call, 
-                            // Actually, just going back to 'Ready' is the standard behaviour required here
-                            const readyStatus = 'Ready (Voice, Voicemail)';
-                            setStatus(readyStatus);
-                            // We DO NOT reset elapsedTime to 0 here.
-                            // The user requested that the time spent on the call should be ADDED
-                            // to the time they already had in "Ready" status.
-                            // Since `elapsedTime` keeps counting in the background during the call (because the interval in useEffect doesn't stop),
-                            // just not resetting it will naturally preserve the total contiguous time (Ready + On Call + Ready again).
-                            localStorage.setItem('five9_status', readyStatus);
+                            const restored = statusBeforeCallRef.current || 'Ready (Voice, Voicemail)';
+                            setStatus(restored);
+                            localStorage.setItem('five9_status', restored);
                             window.dispatchEvent(new Event('five9_status_changed'));
+                            statusBeforeCallRef.current = null;
                         }}
                         className={`px-4 py-2 text-white rounded text-sm font-normal w-1/2 transition-colors ${selectedDisposition ? 'bg-[#0070d2] hover:bg-[#005fb2]' : 'bg-[#d8dde6] cursor-not-allowed'}`}
                         disabled={!selectedDisposition}
