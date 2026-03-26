@@ -128,6 +128,7 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
             });
             // 3. Auto-answer logic
             setStatus('On Call');
+            setElapsedTime(0);
             setCallDirection('simulated');
             setCallStatus('Connected');
             setCallDuration(0);
@@ -421,10 +422,15 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
                     setCallDuration(prev => {
                         if (prev <= 0) {
                             clearInterval(interval);
-                            const restored = statusBeforeCallRef.current || 'Forzado';
+                            const forcedStatus = 'Forzado';
                             setView('console');
-                            setStatus(restored);
-                            localStorage.setItem('five9_status', restored);
+                            setActiveCall(null);
+                            setCallStatus('');
+                            setSelectedDisposition(null);
+                            setDispositionSearch('');
+                            setStatus(forcedStatus);
+                            setElapsedTime(0);
+                            localStorage.setItem('five9_status', forcedStatus);
                             window.dispatchEvent(new Event('five9_status_changed'));
                             statusBeforeCallRef.current = null;
                             return 0;
@@ -1510,6 +1516,7 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
 
                                     const restored = statusBeforeCallRef.current || 'Ready (Voice, Voicemail)';
                                     setStatus(restored);
+                                    setElapsedTime(0);
                                     localStorage.setItem('five9_status', restored);
                                     window.dispatchEvent(new Event('five9_status_changed'));
                                     statusBeforeCallRef.current = null;
@@ -1657,6 +1664,7 @@ export const Five9Login: React.FC<Five9LoginProps> = ({ onClose, onMinimize }) =
 
                             const restored = statusBeforeCallRef.current || 'Ready (Voice, Voicemail)';
                             setStatus(restored);
+                            setElapsedTime(0);
                             localStorage.setItem('five9_status', restored);
                             window.dispatchEvent(new Event('five9_status_changed'));
                             statusBeforeCallRef.current = null;
