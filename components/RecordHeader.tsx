@@ -4,6 +4,8 @@ import { ProspectData } from '../App';
 interface RecordHeaderProps {
     data: ProspectData;
     onNewTaskClick?: () => void;
+    /** Al menos una oportunidad en etapa "Ganada verificada": encabezado fijo estilo Person Account (solo País dinámico). */
+    verifiedWonLayout?: boolean;
 }
 
 /**
@@ -11,7 +13,11 @@ interface RecordHeaderProps {
  * Matches the SF Lightning UI header: icon, object type label, name, action buttons, and highlight fields row.
  * Uses ONLY inline styles to avoid any Tailwind CSS class leakage.
  */
-export const RecordHeader: React.FC<RecordHeaderProps> = ({ data, onNewTaskClick }) => {
+export const RecordHeader: React.FC<RecordHeaderProps> = ({
+    data,
+    onNewTaskClick,
+    verifiedWonLayout = false,
+}) => {
     const daysCreation = data.daysCreation !== undefined
         ? data.daysCreation
         : (data.createdAt
@@ -46,6 +52,173 @@ export const RecordHeader: React.FC<RecordHeaderProps> = ({ data, onNewTaskClick
         whiteSpace: 'nowrap',
         lineHeight: 1,
     };
+
+    // ── Oportunidad "Ganada verificada": encabezado Person Account (referencia UI) ──
+    if (verifiedWonLayout) {
+        const verifiedFields: { label: string; value: React.ReactNode }[] = [
+            { label: 'País', value: (data.country || '').trim() || '—' },
+            { label: 'Tipo de registro de cuenta', value: 'Person Account' },
+            { label: 'quote_business_type', value: 'Legacy' },
+            { label: 'Portal', value: 'Portal 2' },
+            { label: 'Estado usuario', value: 'Sin definir' },
+            { label: 'Sub Estado Usuario', value: '\u00a0' },
+        ];
+
+        const PersonAccountIcon = (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" aria-hidden>
+                <g fill="white">
+                    <path d="M2 21V8l7-4.5L16 8v13h-4v-5H6v5H2z" />
+                    <circle cx="18.5" cy="7" r="2.75" />
+                    <path d="M18.5 11c-2.2 0-3.5 1.3-3.5 2.75V16H22v-2.25c0-1.45-1.3-2.75-3.5-2.75z" />
+                </g>
+            </svg>
+        );
+
+        return (
+            <div
+                style={{
+                    background: '#ffffff',
+                    border: `1px solid ${COLOR_BORDER}`,
+                    borderRadius: '4px',
+                    padding: '12px 16px 10px 16px',
+                    fontFamily: FONT,
+                    userSelect: 'none',
+                    marginBottom: '8px',
+                    marginLeft: '8px',
+                    marginRight: '8px',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+                }}
+            >
+                <div
+                    style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        marginBottom: '0',
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                        <div
+                            style={{
+                                width: '36px',
+                                height: '36px',
+                                background: '#1589ee',
+                                borderRadius: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                marginTop: '1px',
+                            }}
+                        >
+                            {PersonAccountIcon}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                            <span
+                                style={{
+                                    fontSize: '11px',
+                                    fontWeight: 400,
+                                    color: COLOR_LABEL,
+                                    lineHeight: 1.4,
+                                    letterSpacing: '0.01em',
+                                }}
+                            >
+                                Cuenta personal
+                            </span>
+                            <span
+                                style={{
+                                    fontSize: '20px',
+                                    fontWeight: 700,
+                                    color: COLOR_NAME,
+                                    lineHeight: 1.2,
+                                    letterSpacing: '-0.01em',
+                                }}
+                            >
+                                {data.firstName} {data.lastName}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', paddingTop: '2px' }}>
+                        <button style={btnStyle}>
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="13"
+                                height="13"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            >
+                                <line x1="12" y1="5" x2="12" y2="19" />
+                                <line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                            Seguir
+                        </button>
+                        <button style={btnStyle} onClick={onNewTaskClick}>
+                            Nueva tarea
+                        </button>
+                    </div>
+                </div>
+
+                <div
+                    style={{
+                        borderTop: `1px solid ${COLOR_BORDER}`,
+                        marginTop: '10px',
+                        paddingTop: '10px',
+                    }}
+                >
+                    <div
+                        style={{
+                            display: 'flex',
+                            flexDirection: 'row',
+                            alignItems: 'flex-start',
+                            justifyContent: 'space-between',
+                            gap: '12px',
+                            width: '100%',
+                        }}
+                    >
+                        {verifiedFields.map(({ label, value }) => (
+                            <div
+                                key={label}
+                                style={{
+                                    flex: '1 1 0',
+                                    minWidth: 0,
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        fontSize: '11px',
+                                        fontWeight: 400,
+                                        color: COLOR_LABEL,
+                                        marginBottom: '2px',
+                                        lineHeight: 1.3,
+                                    }}
+                                >
+                                    {label}
+                                </div>
+                                <div
+                                    style={{
+                                        fontSize: '13px',
+                                        fontWeight: 400,
+                                        color: COLOR_VALUE,
+                                        lineHeight: 1.35,
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    {value}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     // ── Highlight fields ───────────────────────────────────────────────────
     const BlueBox = (

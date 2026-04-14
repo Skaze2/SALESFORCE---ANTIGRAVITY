@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Header } from './components/Header';
 import { SubHeader } from './components/SubHeader';
 import { RecordHeader } from './components/RecordHeader';
@@ -1115,6 +1115,35 @@ const App = () => {
         setTimeout(() => setTaskToast({ visible: false, message: '' }), 4000);
     };
 
+    /** Encabezado estilo Person Account cuando hay oportunidad "Ganada verificada" */
+    const [activeTabVerifiedWonHeader, setActiveTabVerifiedWonHeader] = useState(false);
+
+    const activeProspectTabForHeader = useMemo(
+        () => tabs.find((t) => t.id === activeTabId),
+        [tabs, activeTabId]
+    );
+
+    useEffect(() => {
+        const tab = activeProspectTabForHeader;
+        if (!tab?.id || tab.type === 'new-case' || tab.type === 'opportunity') {
+            setActiveTabVerifiedWonHeader(false);
+            return;
+        }
+        const oppRef = db.ref(`opportunities/${tab.id}`);
+        const handler = oppRef.on('value', (snap: any) => {
+            const val = snap.val();
+            if (!val) {
+                setActiveTabVerifiedWonHeader(false);
+                return;
+            }
+            const won = Object.values(val).some(
+                (o: any) => String(o?.stage ?? '').trim().toLowerCase() === 'ganada verificada'
+            );
+            setActiveTabVerifiedWonHeader(won);
+        });
+        return () => oppRef.off('value', handler);
+    }, [activeProspectTabForHeader?.id, activeProspectTabForHeader?.type]);
+
     // 4. Real-time Firebase listeners for open record tabs
     //    Whenever the set of open tabs changes, subscribe to each prospect's
     //    Firebase node so every agent sees status/owner updates instantly.
@@ -1434,7 +1463,11 @@ const App = () => {
                 <div className="flex-1 relative">
                     {subView === 'main' ? (
                         <div className="flex flex-col h-full bg-white relative">
-                            <RecordHeader data={activeTab} onNewTaskClick={() => setIsTaskModalOpen(true)} />
+                            <RecordHeader
+                                data={activeTab}
+                                onNewTaskClick={() => setIsTaskModalOpen(true)}
+                                verifiedWonLayout={activeTabVerifiedWonHeader}
+                            />
                             <div className="flex-1 relative">
                                 <RecordBody
                                     data={activeTab}
