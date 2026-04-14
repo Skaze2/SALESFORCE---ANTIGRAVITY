@@ -7,7 +7,30 @@ import { CheckoutModal } from './CheckoutModal';
 import { generateSmartbeemoSubscriptionId, buildCheckoutPaymentUrl } from '../utils/checkoutIds';
 
 // --- Constants ---
-const STEPS = ['MQL', 'SQL', 'En llamada', 'Agendado', 'Asignado'];
+const STEPS_CLASSIC = ['MQL', 'SQL', 'En llamada', 'Agendado', 'Asignado'] as const;
+const STEPS_ALT = ['Usuario', 'Agendado', 'Asignado', 'Cerrado'] as const;
+
+const ERR_VERIFIED_WON_STATE_LOCK =
+    'No tiene permisos para modificar el estado de este estudiante. Si existe una oportunidad en etapa Ganada verificada, el registro permanece en Usuario y el propietario debe ser Administrador Salesforce.';
+
+/** Si hay al menos una oportunidad en etapa Ganada verificada, la barra de pasos usa STEPS_ALT. */
+function statusToStepIndex(status: string | undefined, useAlt: boolean): number {
+    const s = status || '';
+    if (useAlt) {
+        const i = (STEPS_ALT as readonly string[]).indexOf(s);
+        if (i !== -1) return i;
+        if (['MQL', 'SQL', 'En llamada'].includes(s)) return 0;
+        if (s === 'Agendado') return 1;
+        if (s === 'Asignado') return 2;
+        if (s === 'Cerrado') return 3;
+        return 0;
+    }
+    const i = (STEPS_CLASSIC as readonly string[]).indexOf(s);
+    if (i !== -1) return i;
+    if (s === 'Usuario') return 0;
+    if (s === 'Cerrado') return 4;
+    return 0;
+}
 
 const SUBJECT_OPTIONS = [
     "Agenda",
@@ -458,26 +481,50 @@ const QuickLinks: React.FC<{ prospectId: string; onOpenRecord?: (record: any) =>
 interface PathBarProps {
     currentStep: number;
     onStepChange: (step: number) => void;
+    steps: readonly string[];
+    /** Barra alterna cuando el cliente tiene oportunidad Ganada verificada */
+    variant?: 'classic' | 'verifiedWon';
+    /** Oportunidad ganada verificada: no se puede cambiar de Usuario ni reasignar desde la barra */
+    stateLocked?: boolean;
 }
 
-const PathBar: React.FC<PathBarProps> = ({ currentStep, onStepChange }) => {
+const PathBar: React.FC<PathBarProps> = ({ currentStep, onStepChange, steps, variant = 'classic', stateLocked = false }) => {
     const [selectedStep, setSelectedStep] = useState(currentStep);
 
     useEffect(() => {
         setSelectedStep(currentStep);
     }, [currentStep]);
 
-    const handleStepClick = (index: number) => setSelectedStep(index);
-    const handleMarkAsCurrent = () => onStepChange(selectedStep);
+    useEffect(() => {
+        if (stateLocked) setSelectedStep(0);
+    }, [stateLocked]);
+
+    const handleStepClick = (index: number) => {
+        if (stateLocked) return;
+        setSelectedStep(index);
+    };
+    const handleMarkAsCurrent = () => {
+        if (stateLocked) return;
+        onStepChange(selectedStep);
+    };
+
+    const markLabel =
+        variant === 'verifiedWon'
+            ? selectedStep !== currentStep
+                ? 'Marcar Estado como completado(a)'
+                : 'Marcar como completado'
+            : selectedStep !== currentStep
+              ? 'Marcar como actual'
+              : 'Marcar como completado';
 
     return (
         <div style={{ background: '#f3f2f2', borderBottom: '1px solid #dddbda', padding: '8px 16px' }}>
             <div className="flex items-center justify-between gap-3">
                 {/* Chevron path bar */}
                 <div className="flex flex-1 h-[30px] relative isolate">
-                    {STEPS.map((step, index) => {
+                    {steps.map((step, index) => {
                         const isFirst = index === 0;
-                        const isLast = index === STEPS.length - 1;
+                        const isLast = index === steps.length - 1;
                         const isCompleted = index < currentStep;
                         const isCurrent = index === currentStep;
                         const isSelected = index === selectedStep;
@@ -508,7 +555,7 @@ const PathBar: React.FC<PathBarProps> = ({ currentStep, onStepChange }) => {
                             <div
                                 key={step}
                                 onClick={() => handleStepClick(index)}
-                                className="flex-1 flex items-center justify-center cursor-pointer group transition-all"
+                                className={`flex-1 flex items-center justify-center group transition-all ${stateLocked ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}
                                 style={{
                                     background: bg,
                                     color: textColor,
@@ -516,6 +563,7 @@ const PathBar: React.FC<PathBarProps> = ({ currentStep, onStepChange }) => {
                                     zIndex: 50 - index,
                                     marginLeft: isFirst ? 0 : '-10px',
                                     border: isCurrent && !isSelected ? '1px solid #c9c7c5' : 'none',
+                                    pointerEvents: stateLocked ? 'none' : 'auto',
                                 }}
                             >
                                 {isCompleted && !isSelected ? (
@@ -534,16 +582,33 @@ const PathBar: React.FC<PathBarProps> = ({ currentStep, onStepChange }) => {
 
                 {/* Action button */}
                 <button
+                    type="button"
+                    disabled={stateLocked}
                     onClick={handleMarkAsCurrent}
                     style={{
-                        background: '#16325c', color: '#fff', fontSize: '12px', fontWeight: 700,
-                        border: 'none', borderRadius: '4px', padding: '0 12px', whiteSpace: 'nowrap',
-                        height: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
+                        background: stateLocked ? '#b0adab' : '#16325c',
+                        color: '#fff',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '0 12px',
+                        whiteSpace: 'nowrap',
+                        height: '28px',
+                        cursor: stateLocked ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
                         flexShrink: 0,
                     }}
+                    title={
+                        stateLocked
+                            ? 'Estado fijo en Usuario: oportunidad con pago verificado ganado.'
+                            : undefined
+                    }
                 >
                     <Check size={13} strokeWidth={3} />
-                    {selectedStep !== currentStep ? 'Marcar como actual' : 'Marcar como completado'}
+                    {markLabel}
                 </button>
             </div>
         </div>
@@ -580,7 +645,15 @@ const TabBar = ({ activeTab, onTabChange }: { activeTab: string, onTabChange: (t
 
 // --- Sub-View Components ---
 
-const DetailsTab = ({ currentStepName, data }: { currentStepName: string, data: ProspectData }) => {
+const DetailsTab = ({
+    currentStepName,
+    data,
+    useVerifiedWonPath,
+}: {
+    currentStepName: string;
+    data: ProspectData;
+    useVerifiedWonPath: boolean;
+}) => {
     const [accInfoOpen, setAccInfoOpen] = useState(true);
     const [contactInfoOpen, setContactInfoOpen] = useState(false);
 
@@ -604,7 +677,9 @@ const DetailsTab = ({ currentStepName, data }: { currentStepName: string, data: 
     // ────────────────────────────────────────────────────────────────────────
 
     // Business Logic for Field Visibility
-    const showEmail = ['En llamada', 'Agendado', 'Asignado'].includes(currentStepName);
+    const showEmail = useVerifiedWonPath
+        ? ['Usuario', 'Agendado', 'Asignado'].includes(currentStepName)
+        : ['En llamada', 'Agendado', 'Asignado'].includes(currentStepName);
     const showMobile = ['Agendado', 'Asignado'].includes(currentStepName);
 
     // Format created date
@@ -944,7 +1019,19 @@ const ActivitySidebar: React.FC<{
     prospectName?: string;
     onTaskCreated: (subject: string) => void;
     onOpenCheckoutModal: () => void;
-}> = ({ currentStepName, prospectId, currentUser, daysCreation, country, owner, prospectName, onTaskCreated, onOpenCheckoutModal }) => {
+    useVerifiedWonPath: boolean;
+}> = ({
+    currentStepName,
+    prospectId,
+    currentUser,
+    daysCreation,
+    country,
+    owner,
+    prospectName,
+    onTaskCreated,
+    onOpenCheckoutModal,
+    useVerifiedWonPath,
+}) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [saving, setSaving] = useState(false);
     const [wizardStep, setWizardStep] = useState(0);
@@ -991,7 +1078,10 @@ const ActivitySidebar: React.FC<{
     const containerRef = useRef<HTMLDivElement>(null);
     const userFullName = `${currentUser.firstName} ${currentUser.lastName}`.trim();
     const isOwner = owner === userFullName;
-    const showPromoButton = ['En llamada', 'Agendado', 'Asignado'].includes(currentStepName) && isOwner;
+    const showPromoButton =
+        (useVerifiedWonPath
+            ? ['Usuario', 'Agendado', 'Asignado'].includes(currentStepName)
+            : ['En llamada', 'Agendado', 'Asignado'].includes(currentStepName)) && isOwner;
 
     useEffect(() => { setReminderTime(getBogotaTime()); }, []);
 
@@ -1313,6 +1403,101 @@ export const RecordBody: React.FC<{
         return () => ref.off('value', handler);
     }, [data.id]);
 
+    /** Al menos una oportunidad en "Ganada verificada" → barra Usuario / Agendado / Asignado / Cerrado */
+    const [hasWonVerifiedOpportunity, setHasWonVerifiedOpportunity] = useState(false);
+
+    useEffect(() => {
+        const ref = db.ref(`opportunities/${data.id}`);
+        const handler = ref.on('value', (snap) => {
+            const val = snap.val();
+            if (!val) {
+                setHasWonVerifiedOpportunity(false);
+                return;
+            }
+            const won = Object.values(val).some(
+                (o: any) => String(o?.stage ?? '').trim().toLowerCase() === 'ganada verificada'
+            );
+            setHasWonVerifiedOpportunity(won);
+        });
+        return () => ref.off('value', handler);
+    }, [data.id]);
+
+    // Con oportunidad ganada verificada: forzar Usuario + pool admin (liberar del asesor si aplica)
+    useEffect(() => {
+        if (!hasWonVerifiedOpportunity || !data.id) return;
+
+        const owner = (data.owner || '').trim();
+        const status = data.status || '';
+        if (status === 'Usuario' && owner === 'Administrador Salesforce') return;
+
+        let cancelled = false;
+
+        const run = async () => {
+            try {
+                const now = new Date();
+                const dateStr = now
+                    .toLocaleString('es-CO', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true,
+                    })
+                    .replace(',', '');
+
+                if (status !== 'Usuario') {
+                    await db.ref(`history/${data.id}`).push({
+                        date: dateStr,
+                        field: 'Estado',
+                        user: 'Sistema Automático',
+                        original: status,
+                        new: 'Usuario',
+                        createdAt: now.toISOString(),
+                    });
+                }
+                if (owner !== 'Administrador Salesforce') {
+                    await db.ref(`history/${data.id}`).push({
+                        date: dateStr,
+                        field: 'Propietario de la cuenta',
+                        user: 'Sistema Automático',
+                        original: owner || '—',
+                        new: 'Administrador Salesforce',
+                        createdAt: new Date(now.getTime() + 1).toISOString(),
+                    });
+                }
+
+                let payload: any = {
+                    status: 'Usuario',
+                    owner: 'Administrador Salesforce',
+                    statusUpdatedAt: now.toISOString(),
+                };
+                if (data.id.includes('-sim-')) {
+                    payload = { ...data, ...payload };
+                    delete payload.id;
+                }
+
+                await db.ref(`prospects/${data.id}`).update(payload);
+
+                if (!cancelled) {
+                    onUpdateRecord({
+                        ...data,
+                        status: 'Usuario',
+                        owner: 'Administrador Salesforce',
+                        statusUpdatedAt: now.toISOString(),
+                    });
+                }
+            } catch (e) {
+                console.error('Auto-release oportunidad verificada:', e);
+            }
+        };
+
+        run();
+        return () => {
+            cancelled = true;
+        };
+    }, [hasWonVerifiedOpportunity, data.id, data.status, data.owner]);
+
     const handleAddNote = async (note: { title: string; body: string }) => {
         const now = new Date();
         const newNote = {
@@ -1333,14 +1518,35 @@ export const RecordBody: React.FC<{
     };
 
     useEffect(() => {
-        const idx = STEPS.indexOf(data.status || 'MQL');
-        if (idx !== -1) setCurrentStep(idx);
-        else setCurrentStep(0);
-    }, [data.status]);
+        const useAlt = hasWonVerifiedOpportunity;
+        const steps = useAlt ? STEPS_ALT : STEPS_CLASSIC;
+        const idx = statusToStepIndex(data.status, useAlt);
+        const clamped = Math.max(0, Math.min(idx, steps.length - 1));
+        setCurrentStep(clamped);
+    }, [data.status, hasWonVerifiedOpportunity]);
 
     const handleStepChange = async (index: number) => {
         const userFullName = `${currentUser.firstName} ${currentUser.lastName}`.trim();
         const recordOwner = (data.owner || '').trim();
+
+        const useAlt = hasWonVerifiedOpportunity;
+        const stepsList = useAlt ? STEPS_ALT : STEPS_CLASSIC;
+        const newStatus = stepsList[index];
+
+        if (hasWonVerifiedOpportunity) {
+            if (index !== 0 || newStatus !== 'Usuario') {
+                setErrorMessage(ERR_VERIFIED_WON_STATE_LOCK);
+                setShowErrorToast(true);
+                setTimeout(() => setShowErrorToast(false), 6000);
+                return;
+            }
+            if (
+                data.status === 'Usuario' &&
+                (data.owner || '').trim() === 'Administrador Salesforce'
+            ) {
+                return;
+            }
+        }
 
         // Permission check:
         // 1. User owns the record
@@ -1351,8 +1557,6 @@ export const RecordBody: React.FC<{
             setTimeout(() => setShowErrorToast(false), 4000);
             return;
         }
-
-        const newStatus = STEPS[index];
 
         // === AGENDADO RULE: Must have a task with subject "Agenda" created by THIS agent ===
         if (newStatus === 'Agendado') {
@@ -1407,11 +1611,9 @@ export const RecordBody: React.FC<{
         // ══════════════════════════════════════════
         // CAPACITY LIMITS PER USER
         // ══════════════════════════════════════════
-        const CAPACITY_LIMITS: Record<string, number> = {
-            'En llamada': 1,
-            'Agendado': 5,
-            'Asignado': 5,
-        };
+        const CAPACITY_LIMITS: Record<string, number> = useAlt
+            ? { Usuario: 1, Agendado: 5, Asignado: 5 }
+            : { 'En llamada': 1, Agendado: 5, Asignado: 5 };
 
         if (CAPACITY_LIMITS[newStatus] !== undefined) {
             const limit = CAPACITY_LIMITS[newStatus];
@@ -1441,8 +1643,8 @@ export const RecordBody: React.FC<{
 
 
         // Ownership Logic:
-        // If moving back to SQL -> Release to Admin pool
-        if (newStatus === 'SQL') {
+        // SQL o Usuario (barra verificada) -> pool Administrador Salesforce
+        if (newStatus === 'SQL' || newStatus === 'Usuario') {
             newOwner = 'Administrador Salesforce';
         } else {
             // If moving to any other stage (and permissions passed), assign to current user
@@ -1513,6 +1715,10 @@ export const RecordBody: React.FC<{
         }
     };
 
+    const pathSteps = hasWonVerifiedOpportunity ? STEPS_ALT : STEPS_CLASSIC;
+    const currentStepName =
+        pathSteps[Math.min(currentStep, pathSteps.length - 1)] ?? pathSteps[0];
+
     return (
         <div className="flex flex-col bg-white relative font-sans text-[#181b25]">
             {showSuccessToast && <SuccessToast message={successMessage} onClose={() => { setShowSuccessToast(false); setSuccessMessage(undefined); }} />}
@@ -1523,7 +1729,13 @@ export const RecordBody: React.FC<{
             </div>
 
             <div style={{ marginBottom: '4px', marginLeft: '8px', marginRight: '8px' }}>
-                <PathBar currentStep={currentStep} onStepChange={handleStepChange} />
+                <PathBar
+                    currentStep={currentStep}
+                    onStepChange={handleStepChange}
+                    steps={pathSteps}
+                    variant={hasWonVerifiedOpportunity ? 'verifiedWon' : 'classic'}
+                    stateLocked={hasWonVerifiedOpportunity}
+                />
             </div>
 
             <div className="flex flex-1">
@@ -1531,7 +1743,13 @@ export const RecordBody: React.FC<{
                     <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
 
                     <div className="flex-1 bg-[#eef1f6] p-4 min-h-[500px]">
-                        {activeTab === 'Detalles' && <DetailsTab currentStepName={STEPS[currentStep]} data={data} />}
+                        {activeTab === 'Detalles' && (
+                            <DetailsTab
+                                currentStepName={currentStepName}
+                                data={data}
+                                useVerifiedWonPath={hasWonVerifiedOpportunity}
+                            />
+                        )}
                         {activeTab === 'Notas' && <NotesTab notes={notes} onOpenNewNote={() => setIsNoteModalOpen(true)} />}
                         {activeTab === 'Archivos' && <FilesTab />}
                         {activeTab === 'Historial' && <HistoryTab history={historyItems} onOpenHistory={onOpenHistory} />}
@@ -1544,13 +1762,14 @@ export const RecordBody: React.FC<{
                     <div className="flex-1 p-3">
                         <ActivitySidebar
                             key={`${data.id}-${data.owner}`}
-                            currentStepName={STEPS[currentStep]}
+                            currentStepName={currentStepName}
                             prospectId={data.id}
                             currentUser={currentUser}
                             daysCreation={data.daysCreation}
                             country={data.country}
                             owner={data.owner}
                             prospectName={`${data.firstName} ${data.lastName}`.trim()}
+                            useVerifiedWonPath={hasWonVerifiedOpportunity}
                             onOpenCheckoutModal={() => setShowCheckoutModal(true)}
                             onTaskCreated={(subject) => {
                                 setSuccessMessage(`Se creó la tarea "${subject}"`);
