@@ -458,9 +458,10 @@ export const OpportunityDetailView: React.FC<OpportunityDetailViewProps> = ({ op
             <CheckoutModal
                 isOpen={showCheckoutModal}
                 onClose={() => setShowCheckoutModal(false)}
+                prospectId={opportunity?.prospectId}
                 data={{
-                    firstName: opportunity?.firstName || '', // Opportunity might not have firstName/lastName directly if it's not the prospect object, need to ensure data source.
-                    lastName: '',                             // Usually prospectName is a combined field in our data.
+                    firstName: opportunity?.firstName || '',
+                    lastName: opportunity?.lastName || '',
                     email: opportunity?.email || ''
                 }}
                 checkoutData={opportunity ? {
@@ -472,7 +473,9 @@ export const OpportunityDetailView: React.FC<OpportunityDetailViewProps> = ({ op
                     nextQuotaDate: (() => {
                         const d = new Date();
                         return new Date(d.getFullYear(), d.getMonth() + 1, d.getDate()).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
-                    })()
+                    })(),
+                    subscriptionId: opportunity.subscriptionId,
+                    paymentLink: opportunity.paymentLink,
                 } : null}
             />
         </div>

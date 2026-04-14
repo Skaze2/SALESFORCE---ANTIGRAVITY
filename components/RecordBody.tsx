@@ -4,6 +4,7 @@ import { NewNoteModal } from './NewNoteModal';
 import { ProspectData, User as UserType } from '../App';
 import { db } from '../firebaseConfig';
 import { CheckoutModal } from './CheckoutModal';
+import { generateSmartbeemoSubscriptionId, buildCheckoutPaymentUrl } from '../utils/checkoutIds';
 
 // --- Constants ---
 const STEPS = ['MQL', 'SQL', 'En llamada', 'Agendado', 'Asignado'];
@@ -1032,9 +1033,10 @@ const ActivitySidebar: React.FC<{
         if (wizardStep === 2 && !selectedProduct) { setErrorMessage("Debes seleccionar un producto para continuar."); return; }
         if (wizardStep === 3 && !selectedOffer) { setErrorMessage("Debes seleccionar una oferta para continuar."); return; }
         if (wizardStep === 5) {
-            // Genera un ID único para la oportunidad/checkout atado a este cliente
-            const uniqueCheckoutId = `chk_${prospectId}_${Date.now()}`;
-            setGeneratedLink(`https://smartbeemo.com/checkout/?subscriptionid=${uniqueCheckoutId}`);
+            // Un solo ID de suscripción por checkout (enlace de solo lectura / registro en Firebase)
+            const subscriptionId = generateSmartbeemoSubscriptionId(prospectId);
+            const paymentLink = buildCheckoutPaymentUrl(subscriptionId);
+            setGeneratedLink(paymentLink);
 
             // Create the Opportunity Record in Firebase
             if (selectedProduct && selectedOffer) {
@@ -1062,6 +1064,7 @@ const ActivitySidebar: React.FC<{
                 }).format(selectedOffer.total); // Only formatting digits without currency symbol for the table digit column
 
                 const opportunity = {
+                    prospectId,
                     name: oppName,
                     saleType: "Adquisicion",
                     type: "Bootcamp", // Based on requirements
@@ -1072,7 +1075,8 @@ const ActivitySidebar: React.FC<{
                     createdDisplay: createdDisplay,
                     closeDate: closeDateDisplay,
                     subNumber: `A-S00${Math.floor(Math.random() * 900000) + 100000}`,
-                    paymentLink: `https://smartbeemo.com/checkout/?subscriptionid=chk_${prospectId}_${Date.now()}`,
+                    paymentLink,
+                    subscriptionId,
                     productName: selectedProduct.name,
                     initialPayment: formatOfferMoney(initialFee).replace(/[^\d.,]/g, ''),
                     installmentAmount: formatOfferMoney((selectedOffer.total - initialFee) / 11).replace(/[^\d.,]/g, ''),
@@ -1095,6 +1099,9 @@ const ActivitySidebar: React.FC<{
                     quotasCount: 11,
                     quotaValue: perInstallment,
                     currency: offerCurrency,
+                    subscriptionId,
+                    paymentLink,
+                    paymentStatus: 'pending' as const,
                     generatedAt: now.toISOString(),
                     nextQuotaDate: new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })
                 };
@@ -1566,6 +1573,7 @@ export const RecordBody: React.FC<{
             <CheckoutModal
                 isOpen={showCheckoutModal}
                 onClose={() => setShowCheckoutModal(false)}
+                prospectId={data.id}
                 data={data}
                 checkoutData={activeCheckoutData ? {
                     productName: activeCheckoutData.productName,
@@ -1573,7 +1581,10 @@ export const RecordBody: React.FC<{
                     quotaValue: activeCheckoutData.quotaValue,
                     quotasCount: activeCheckoutData.quotasCount,
                     currency: activeCheckoutData.currency,
-                    nextQuotaDate: activeCheckoutData.nextQuotaDate
+                    nextQuotaDate: activeCheckoutData.nextQuotaDate,
+                    subscriptionId: activeCheckoutData.subscriptionId,
+                    paymentLink: activeCheckoutData.paymentLink,
+                    paymentStatus: activeCheckoutData.paymentStatus,
                 } : null}
             />
         </div>
