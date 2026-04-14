@@ -1134,7 +1134,7 @@ const App = () => {
                 setTabs((prev) =>
                     prev.map((t) =>
                         t.id === tab.id
-                            ? { ...t, status: val.status, owner: val.owner }
+                            ? { ...t, status: val.status, owner: val.owner, statusUpdatedAt: val.statusUpdatedAt }
                             : t
                     )
                 );

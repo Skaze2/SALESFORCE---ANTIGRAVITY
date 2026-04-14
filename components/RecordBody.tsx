@@ -65,21 +65,19 @@ const ErrorToast = ({ message, onClose }: { message?: string; onClose: () => voi
 
 // --- WIZARD DATA --- (Unchanged constants)
 const PRODUCTS = [
-    { id: 1, name: "Beemo Pro - 12 meses", mentor: "Beemo", start: "2 de nov de 2025", end: "" },
-    { id: 2, name: "Combo Tian Rodríguez", mentor: "Tian Rodríguez", start: "2 de nov de 2025", end: "" },
-    { id: 3, name: "Programa: Método C.A.D.I.", mentor: "Horacio Lezzi", start: "1 de dic de 2025", end: "" },
-    { id: 4, name: "Programa: Método K2", mentor: "Tian Rodríguez", start: "1 de dic de 2025", end: "" },
-    { id: 5, name: "Curso Cashflow Infinito: De 0 a 1800+ Apartamentos", mentor: "Carlos Salguero", start: "11 de dic de 2025", end: "" },
-    { id: 6, name: "Combo Mis Propias Finanzas", mentor: "Juan Pablo Zuluaga", start: "12 de dic de 2025", end: "" },
-    { id: 7, name: "Ruta de Patrimonio Inteligente (RPI)", mentor: "Camilo Rodríguez", start: "30 de dic de 2025", end: "" },
-    { id: 8, name: "Reprogramación cuántica en 40 días", mentor: "Laura Moreno", start: "2 de ene de 2026", end: "" },
-    { id: 9, name: "Curso: VIBE Marketing - Anuncios en RRSS", mentor: "Juan Osorio", start: "6 de ene de 2026", end: "" },
-    { id: 10, name: "Curso: Embajadores energéticos 1.0", mentor: "Camilo Vargas", start: "23 de ene de 2026", end: "" },
-    { id: 11, name: "Ideas de Negocio GANADORAS para el 2026", mentor: "Ammiel Manevich", start: "4 de feb de 2026", end: "13 de feb de 2026" },
-    { id: 12, name: "Programa: Fénix Trader", mentor: "Juan Paladines", start: "4 de feb de 2026", end: "" },
-    { id: 13, name: "Dropshipping: Configuración y Estrategias", mentor: "Fabián Perdomo", start: "16 de feb de 2026", end: "27 de feb de 2026" },
-    { id: 14, name: "Reto China: Crea tu negocio real con China", mentor: "Daniel Molina", start: "17 de feb de 2026", end: "26 de feb de 2026" },
-    { id: 15, name: "Fintech 360°: Modelos de negocio", mentor: "Diego Rodríguez", start: "17 de feb de 2026", end: "27 de feb de 2026" },
+    { id: 1, name: "Combo Tian Rodríguez", mentor: "Tian Rodríguez", start: "2 de nov de 2025", end: "" },
+    { id: 2, name: "Programa: Método K2", mentor: "Tian Rodríguez", start: "1 de dic de 2025", end: "" },
+    { id: 3, name: "Curso Sistema High Ticket - Marcos Razzetti", mentor: "Marcos Razzetti", start: "5 de mar de 2026", end: "" },
+    { id: 4, name: "Combo: VideoTrader + Recupera el Control de tu Dinero", mentor: "Javier Hernández", start: "27 de mar de 2026", end: "" },
+    { id: 5, name: "Creación de Tienda de Dropshipping desde 0 hasta tus primeras ventas automatizada", mentor: "Santiago Murillo", start: "20 de abr de 2026", end: "24 de abr de 2026" },
+    { id: 6, name: "Crea tu negocio real con china en 4 días", mentor: "Daniel Molina", start: "20 de abr de 2026", end: "24 de abr de 2026" },
+    { id: 7, name: "Dropshipping: Configuración, Estrategias Creativas y Tráfico Pago", mentor: "Fabián Perdomo", start: "27 de abr de 2026", end: "8 de may de 2026" },
+    { id: 8, name: "Ventas de Alto Impacto: Trabaja Remoto y Vive de Vender", mentor: "Michel Edery", start: "28 de abr de 2026", end: "15 de may de 2026" },
+    { id: 9, name: "Inteligencia Artificial en Acción: Las Nuevas Ventas Digitales", mentor: "Cristian González", start: "5 de may de 2026", end: "10 de may de 2026" },
+    { id: 10, name: "Bootcamp: Independizate hoy, vendiendo en digital con Whatsapp.", mentor: "Juanma Gaviria", start: "9 de may de 2026", end: "16 de may de 2026" },
+    { id: 11, name: "Amazon FBA: De la idea al lanzamiento", mentor: "Javier Quintero", start: "12 de may de 2026", end: "21 de may de 2026" },
+    { id: 12, name: "Dinero Consciente", mentor: "Nathalia Baron", start: "22 de may de 2026", end: "24 de may de 2026" },
+    { id: 13, name: "Sistema Cero Inventos – Amazon Arbitrage", mentor: "Camilo Chamorro", start: "25 de may de 2026", end: "6 de jun de 2026" },
 ];
 
 // COP (Colombia) — 4 offers, ordered highest → lowest price
@@ -1495,7 +1493,8 @@ export const RecordBody: React.FC<{
             onUpdateRecord({
                 ...data,
                 status: newStatus,
-                owner: newOwner
+                owner: newOwner,
+                statusUpdatedAt: now.toISOString()
             });
 
             setShowSuccessToast(true);

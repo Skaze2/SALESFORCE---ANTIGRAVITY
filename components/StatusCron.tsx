@@ -3,6 +3,9 @@ import { db } from '../firebaseConfig';
 
 const CHECK_INTERVAL = 60 * 1000; // Check every 1 minute
 
+/** Minutos que debe permanecer "En llamada" antes de volver a SQL (no usar createdAt como referencia). */
+const EN_LLAMADA_MINUTES_BEFORE_SQL = 60;
+
 export const StatusCron: React.FC = () => {
     useEffect(() => {
         const checkStatuses = async () => {
@@ -17,22 +20,40 @@ export const StatusCron: React.FC = () => {
                 for (const id in prospects) {
                     const prospect = prospects[id];
                     const status = prospect.status;
-                    const updatedAtStr = prospect.statusUpdatedAt || prospect.createdAt;
 
-                    if (!status || !updatedAtStr) continue;
-
-                    const updatedAt = new Date(updatedAtStr);
-                    const diffMs = now.getTime() - updatedAt.getTime();
-                    const hoursPassed = diffMs / (1000 * 60 * 60);
+                    if (!status) continue;
 
                     let shouldDowngrade = false;
 
-                    if (status === 'Agendado' && hoursPassed >= 24) {
-                        shouldDowngrade = true;
-                    } else if (status === 'Asignado' && hoursPassed >= 48) {
-                        shouldDowngrade = true;
-                    } else if (status === 'En llamada' && hoursPassed >= 1) {
-                        shouldDowngrade = true;
+                    if (status === 'En llamada') {
+                        // Solo cuenta desde la última vez que se guardó el estado (Marcar como actual).
+                        // Si caemos en createdAt, un lead antiguo pasaría a SQL al instante.
+                        const atStr = prospect.statusUpdatedAt;
+                        if (atStr) {
+                            const updatedAt = new Date(atStr);
+                            if (!isNaN(updatedAt.getTime())) {
+                                const diffMs = now.getTime() - updatedAt.getTime();
+                                const minutesPassed = diffMs / (1000 * 60);
+                                if (minutesPassed >= EN_LLAMADA_MINUTES_BEFORE_SQL) {
+                                    shouldDowngrade = true;
+                                }
+                            }
+                        }
+                    } else {
+                        const updatedAtStr = prospect.statusUpdatedAt || prospect.createdAt;
+                        if (!updatedAtStr) continue;
+
+                        const updatedAt = new Date(updatedAtStr);
+                        if (isNaN(updatedAt.getTime())) continue;
+
+                        const diffMs = now.getTime() - updatedAt.getTime();
+                        const hoursPassed = diffMs / (1000 * 60 * 60);
+
+                        if (status === 'Agendado' && hoursPassed >= 24) {
+                            shouldDowngrade = true;
+                        } else if (status === 'Asignado' && hoursPassed >= 48) {
+                            shouldDowngrade = true;
+                        }
                     }
 
                     if (shouldDowngrade) {
