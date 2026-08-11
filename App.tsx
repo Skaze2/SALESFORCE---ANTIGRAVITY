@@ -42,6 +42,9 @@ export interface User {
     firstName: string;
     lastName: string;
     email: string;
+    /** Opcional: hoy los usuarios se guardan sin id y las claves de localStorage
+     *  caen al email. Se declara para tipar los accesos `user.id || user.email`. */
+    id?: string;
 }
 
 export interface FavoriteContext {

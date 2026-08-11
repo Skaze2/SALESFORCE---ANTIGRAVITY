@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sales Console smartBeemo</title>
     <base href="/" />
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind se compila en el build (tailwind.config.js + index.css) y se sirve desde
+         este mismo dominio. Antes venía del Play CDN externo, lo que dejaba la consola sin
+         estilos cuando la red del agente no lograba resolver ese dominio. -->
     <style>
       /* Custom Salesforce-like Scrollbar for Webkit */
       ::-webkit-scrollbar {
